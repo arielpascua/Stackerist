@@ -1,0 +1,28 @@
+{
+  "name": "@stackerist/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stackerist WebSocket message types and zod schemas, shared by client and server.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@stackerist/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "fast-check": "4.10.2",
+    "vitest": "5.1.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["test/**/*.ts", "vitest.config.ts"],
+  "references": [
+    { "path": "./tsconfig.lib.json" },
+    { "path": "../../packages/engine/tsconfig.lib.json" },
+    { "path": "../../packages/protocol/tsconfig.lib.json" }
+  ]
+}

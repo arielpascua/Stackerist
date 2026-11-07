@@ -1,0 +1,39 @@
+{
+  "name": "stackerist",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Server-authoritative two-player online falling-block game.",
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names server,client --prefix-colors cyan,magenta \"pnpm --filter @stackerist/server dev\" \"pnpm --filter @stackerist/client dev\"",
+    "build": "tsc -b tsconfig.build.json && pnpm --filter @stackerist/client build",
+    "start": "node apps/server/dist/index.js",
+    "test": "vitest run",
+    "test:coverage": "pnpm --filter @stackerist/engine test:coverage",
+    "typecheck": "tsc -b",
+    "lint": "eslint . --max-warnings=0 && prettier --check .",
+    "format": "prettier --write .",
+    "e2e": "pnpm build && playwright test -c e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.1.0",
+    "concurrently": "10.0.6",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "fast-check": "4.10.2",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}

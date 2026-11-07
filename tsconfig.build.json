@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Production build graph (used by `pnpm build` and the Dockerfile): only the
+  // emitting library/server projects. The client is bundled by Vite.
+  "files": [],
+  "references": [
+    { "path": "./packages/engine/tsconfig.lib.json" },
+    { "path": "./packages/protocol/tsconfig.lib.json" },
+    { "path": "./apps/server/tsconfig.lib.json" }
+  ]
+}

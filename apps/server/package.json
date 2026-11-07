@@ -1,0 +1,36 @@
+{
+  "name": "@stackerist/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stackerist authoritative game server (Fastify + WebSocket); serves the built client in production.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@stackerist/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch --conditions=@stackerist/source src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.10",
+    "@fastify/websocket": "11.3.7",
+    "@stackerist/engine": "workspace:*",
+    "@stackerist/protocol": "workspace:*",
+    "fastify": "5.12.8",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
+    "fast-check": "4.10.2",
+    "tsx": "4.23.15",
+    "vitest": "5.1.0",
+    "ws": "8.22.1"
+  }
+}

@@ -1,0 +1,32 @@
+# Build context = only what `pnpm install` + `pnpm build` need.
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.vite
+
+# Tests and test output are not part of the image.
+**/test
+e2e
+playwright-report
+test-results
+reports
+.stryker-tmp
+
+# Repo metadata, docs, design sources and tooling state.
+.git
+.github
+.claude
+.superpowers
+.playwright-mcp
+docs
+design
+spec (1).md
+*.md
+
+# Secrets and local noise. Never send env files into the build context.
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
