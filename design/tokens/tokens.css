@@ -1,0 +1,249 @@
+/*
+ * Stackerist: Prime Time design tokens.
+ * The ONLY place colours, fonts, spacing, radii, shadows, z-layers and motion are defined for DOM UI.
+ * The canvas renderer reads design/tokens/tokens.ts, whose values must stay identical to these
+ * (checked mechanically; see DESIGN.md "Token parity check").
+ * Palette source: docs/superpowers/specs/2026-11-07-stackerist-design.md §7, plus the approved
+ * mockups in design/concept-art/. One change, with its reason in DESIGN.md: --piece-L.
+ * Fonts are self-hosted with @fontsource (the frontend imports the CSS); this file only names them.
+ */
+:root {
+  /* ---------- Palette (design §7) ---------- */
+  --color-bg: #16130F;
+  --color-panel: #2A231B;
+  --color-line: #3D3329;
+  --color-text: #F2EADF;
+  --color-text-muted: #BCA98F;
+  --color-accent: #F5B700;
+  --color-alert: #FF5A36;
+  --color-ok: #7BD88F;
+  --color-well: #0E0B08;
+  --color-grid: #251F18;
+  --color-clock-bg: #0B0907;
+  --color-ink: #16130F;
+  --color-ink-soft: #3A2C00;
+  --color-shadow: #000000;
+
+  /* ---------- Pieces (categorical; checked for colour-vision deficiency) ---------- */
+  --piece-I: #F5B700;
+  --piece-O: #E9E4D8;
+  --piece-T: #2FBF71;
+  --piece-S: #FF6A3D;
+  --piece-Z: #3D7BFF;
+  --piece-J: #C89BFF;
+  --piece-L: #12978A;
+  --piece-G: #4A4037;
+  --piece-G-stripe: #3F362E;
+
+  /* ---------- Surfaces and scrims (text never sits on raw art) ---------- */
+  --surface-plate: rgba(22, 19, 15, 0.9);
+  --surface-card: rgba(14, 11, 8, 0.92);
+  --surface-chip: rgba(22, 19, 15, 0.7);
+  --scrim-home-top: rgba(22, 19, 15, 0.3);
+  --scrim-home-bottom: rgba(22, 19, 15, 0.72);
+  --scrim-game: rgba(22, 19, 15, 0.84);
+  --scrim-dim: rgba(14, 11, 8, 0.7);
+
+  /* ---------- Board rendering (mirrored in tokens.ts) ---------- */
+  --board-frame-width: 2px;
+  --board-grid-width: 1px;
+  --bevel-width: 2px;
+  --bevel-width-small: 1px;
+  --bevel-small-below: 16px;
+  --bevel-highlight: rgba(255, 255, 255, 0.32);
+  --bevel-shade: rgba(0, 0, 0, 0.38);
+  --garbage-stripe-width: 3px;
+  --garbage-stripe-width-small: 2px;
+  --ghost-width: 2px;
+  --ghost-alpha: 0.55;
+  --flash-color: #F2EADF;
+  --flash-alpha: 0.85;
+  --bm-clear-outline: rgba(245, 183, 0, 0.9);
+  --bm-finisher-outline: #F2EADF;
+  --danger-rows: 16;
+  --danger-ring-width: 2px;
+  --danger-ring-min-alpha: 0.25;
+  --meter-width: 8px;
+  --meter-width-opp: 6px;
+  --projectile-color: var(--color-accent);
+  --burst-color: var(--color-accent);
+
+  /* ---------- Report chart ---------- */
+  --chart-you: var(--color-accent);
+  --chart-opp: var(--piece-O);
+  --chart-grid: var(--color-grid);
+  --chart-danger: var(--color-alert);
+  --chart-label: var(--color-text-muted);
+  --chart-line-width: 2px;
+  --chart-width: 300px;
+  --chart-height: 180px;
+
+  /* ---------- Layout and cell metrics (formulas in DESIGN.md > Layout) ---------- */
+  --layout-chrome-v: 152px;
+  --layout-chrome-h: 448px;
+  --cell-min: 12px;
+  --cell-max: 40px;
+  --cell-opp-ratio: 0.6;
+  --cell-next-ratio: 0.45;
+  --cell-next-min: 5px;
+  --cell-compact-below: 16px;
+  --bm-chrome-v: 408px;
+  --bm-cell-min: 8px;
+  --bm-cell-max: 12px;
+  --page-pad: 20px;
+  --page-pad-narrow: 16px;
+  --plate-width: 400px;
+  --lobby-width: 440px;
+  --result-card-max: 1040px;
+  --hit-min: 44px;
+  --hit-hud: 32px;
+
+  /* ---------- Typography ---------- */
+  --font-display: "Big Shoulders Display", sans-serif;
+  --font-body: "Archivo", sans-serif;
+  --weight-display-bold: 700;
+  --weight-display-heavy: 800;
+  --weight-display-black: 900;
+  --weight-body: 400;
+  --weight-body-strong: 600;
+  --text-display-xl: 96px;
+  --text-display-lg: 64px;
+  --text-display-md: 44px;
+  --text-display-sm: 30px;
+  --text-title-lg: 24px;
+  --text-title-md: 22px;
+  --text-title-sm: 18px;
+  --text-title-xs: 16px;
+  --text-body: 16px;
+  --text-ui: 15px;
+  --text-small: 14px;
+  --text-table: 13px;
+  --text-meta: 12px;
+  --text-label: 11px;
+  --leading-countdown: 0.85;
+  --leading-headline: 0.9;
+  --leading-display: 1;
+  --leading-stat: 1.05;
+  --leading-label: 1.2;
+  --leading-small: 1.45;
+  --leading-body: 1.5;
+  --tracking-countdown: -0.02em;
+  --tracking-headline: -0.01em;
+  --tracking-none: 0em;
+  --tracking-button: 0.04em;
+  --tracking-clock: 0.06em;
+  --tracking-caption: 0.06em;
+  --tracking-room-code: 0.12em;
+  --tracking-label: 0.16em;
+  --tracking-final: 0.24em;
+  --tracking-code-input: 0.3em;
+  --measure-prose: 65ch;
+  --skew-onair: -12deg;
+
+  /* ---------- Spacing (4 px base) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---------- Radii ---------- */
+  --radius-none: 0px;
+  --radius-control: 3px;
+  --radius-meter: 4px;
+  --radius-plate: 6px;
+  --radius-round: 50%;
+
+  /* ---------- Shadows ---------- */
+  --shadow-board: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-onair: 5px 5px 0 #000000;
+  --shadow-onair-sm: 4px 4px 0 #000000;
+
+  /* ---------- Focus ---------- */
+  --focus-ring-color: var(--color-accent);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* ---------- Z-layers ---------- */
+  --z-backdrop: 0;
+  --z-stage: 1;
+  --z-board-fx: 3;
+  --z-projectiles: 5;
+  --z-hud: 10;
+  --z-overlay: 20;
+  --z-result: 30;
+  --z-dialog: 40;
+  --z-banner: 50;
+
+  /* ---------- Motion: easings (none overshoot: no bounce, no elastic) ---------- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-quad: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------- Motion: durations and distances (one authored moment per event) ---------- */
+  --dur-hover: 80ms;
+  --dur-press: 120ms;
+  --dur-swap: 120ms;
+  --dur-flash: 150ms;
+  --dur-nudge-out: 60ms;
+  --dur-nudge-back: 120ms;
+  --nudge-per-row: 2px;
+  --nudge-max: 8px;
+  --dur-banner-in: 160ms;
+  --dur-banner-hold: 800ms;
+  --dur-banner-out: 200ms;
+  --banner-slide: 12px;
+  --dur-speed-swap: 180ms;
+  --standoff-total: 3000ms;
+  --dur-dim: 240ms;
+  --dur-standoff-in: 320ms;
+  --standoff-offset: 64px;
+  --dur-numeral-in: 200ms;
+  --dur-numeral-out: 120ms;
+  --numeral-scale-from: 1.2;
+  --dur-duel-slam: 140ms;
+  --dur-duel-hold: 360ms;
+  --dur-duel-out: 240ms;
+  --duel-scale-from: 1.6;
+  --dur-projectile: 350ms;
+  --projectile-base: 8px;
+  --projectile-per-row: 4px;
+  --projectile-max: 40px;
+  --projectile-arc: 0.15;
+  --dur-meter-grow: 120ms;
+  --dur-burst: 260ms;
+  --burst-distance: 20px;
+  --dur-danger-period: 900ms;
+  --dur-result-delay: 400ms;
+  --dur-art-in: 400ms;
+  --dur-card-in: 280ms;
+  --card-rise: 16px;
+  --dur-copied: 2000ms;
+  --dur-reduced: 120ms;
+}
+
+/* Reduced motion: no travel, no scale, no pulse. Each event keeps one quiet cue (see DESIGN.md). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --nudge-per-row: 0px;
+    --nudge-max: 0px;
+    --banner-slide: 0px;
+    --standoff-offset: 0px;
+    --numeral-scale-from: 1;
+    --duel-scale-from: 1;
+    --projectile-arc: 0;
+    --burst-distance: 0px;
+    --card-rise: 0px;
+    --flash-alpha: 0.35;
+    --danger-ring-min-alpha: 1;
+  }
+}
