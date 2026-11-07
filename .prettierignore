@@ -1,0 +1,14 @@
+# Generated / vendored
+pnpm-lock.yaml
+**/dist/
+**/coverage/
+playwright-report/
+test-results/
+reports/
+.stryker-tmp/
+
+# Owned by other roles or tools (not reformatted by `pnpm lint`)
+docs/
+design/
+spec (1).md
+.claude/

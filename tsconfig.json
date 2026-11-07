@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Solution file: `pnpm typecheck` runs `tsc -b` over every project below
+  // (sources, tests, client, e2e, tool configs). Never `tsc --noEmit` here:
+  // with "files": [] that would typecheck nothing.
+  "files": [],
+  "references": [
+    { "path": "./packages/engine" },
+    { "path": "./packages/protocol" },
+    { "path": "./apps/server" },
+    { "path": "./apps/client" },
+    { "path": "./e2e" },
+    { "path": "./tsconfig.tools.json" }
+  ]
+}

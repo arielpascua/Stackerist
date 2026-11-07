@@ -1,0 +1,15 @@
+packages:
+  - packages/*
+  - apps/*
+
+# Dependency install scripts are denied unless listed true here (pnpm 11 default: blocked).
+# esbuild (via tsx) works without its postinstall: pnpm installs the platform binary
+# (@esbuild/<os>-<arch>) as an optional dependency, so the script is not needed.
+allowBuilds:
+  esbuild: false
+
+# Fail the install on a Node outside "engines" (>=24 <25) instead of only warning.
+engineStrict: true
+
+# New dependencies are written as exact versions; the lockfile pins the rest.
+savePrefix: ''
