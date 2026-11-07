@@ -39,7 +39,7 @@ export const pieceColor: Readonly<Record<CellKind, string>> = {
   Z: '#3D7BFF',
   J: '#C89BFF',
   L: '#12978A',
-  G: '#4A4037',
+  G: '#776A5D',
 };
 
 export const board = {
@@ -56,7 +56,7 @@ export const board = {
   bevelHighlight: 'rgba(255, 255, 255, 0.32)',
   bevelShade: 'rgba(0, 0, 0, 0.38)',
   /** Garbage (G) is hatched at 135 degrees: alternating stripes of pieceColor.G and garbageStripe. */
-  garbageStripe: '#3F362E',
+  garbageStripe: '#6A5E52',
   garbageStripeWidthPx: 3,
   garbageStripeWidthSmallPx: 2,
 } as const;

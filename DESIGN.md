@@ -22,8 +22,8 @@ colors:
   piece-z: "#3D7BFF"
   piece-j: "#C89BFF"
   piece-l: "#12978A"
-  piece-g: "#4A4037"
-  piece-g-stripe: "#3F362E"
+  piece-g: "#776A5D"
+  piece-g-stripe: "#6A5E52"
   surface-plate: "rgba(22, 19, 15, 0.9)"
   surface-card: "rgba(14, 11, 8, 0.92)"
   surface-chip: "rgba(22, 19, 15, 0.7)"
@@ -273,7 +273,7 @@ and a categorical piece set that keeps away from the classic falling-block colou
 | Z | `--piece-Z` | `#3D7BFF` | broadcast blue |
 | J | `--piece-J` | `#C89BFF` | lilac |
 | L | `--piece-L` | `#12978A` | **adjusted** deep teal (was `#00B3A4`) |
-| G | `--piece-G` + `--piece-G-stripe` | `#4A4037` / `#3F362E` | hatched garbage |
+| G | `--piece-G` + `--piece-G-stripe` | `#776A5D` / `#6A5E52` | hatched garbage |
 
 **Colour-vision check (item 5), with the one change.** A one-off script simulated protanopia,
 deuteranopia and tritanopia with the Machado 2009 matrices (severity 1.0, linear sRGB) and measured
@@ -357,17 +357,16 @@ makes each ratio a floor for any viewport. Thresholds: text 4.5:1, large text 3:
 | `--color-accent` | game scrim worst | 6.47 | 3.0 | ping dot fair, projectile |
 | `--chart-you` / `--chart-opp` / `--chart-danger` | card over worst win-art px | 9.29 / 13.19 / 5.39 | 3.0 | chart marks |
 | pieces I O T S Z J L | well | 10.89 / 15.47 / 8.23 / 6.90 / 5.12 / 8.96 / 5.44 | 3.0 | piece fill vs empty cell |
-| `--piece-G` | well | **1.94** | 3.0 | **exception, see below** |
+| `--piece-G` / `--piece-G-stripe` | well | **3.73 / 3.11** | 3.0 | garbage fill + hatch stripe vs empty cell (hole) |
 
-Minimums: text **4.59**, large text **9.29**, UI **3.76**, all passing.
+Minimums: text **4.59**, large text **9.29**, UI **3.11**, all passing.
 
-**Exception: garbage fill vs well, 1.94:1.** The approved garbage colour is deliberately quiet so
-that it reads as "dead" rows. Every G cell carries the 2 px `--bevel-highlight` top edge, which
-composites to `(132,125,119)` and measures **4.85:1** against the well. Every garbage cell's
-boundary is therefore perceivable at UI contrast, and the hatching plus the single hole per row
-identify garbage without colour. The palette is locked outside the colour-vision rule, so this is
-recorded rather than changed. If Wave 2 finds garbage too faint at 13 px, the fix is lightening
-`--piece-G`, and that needs the owner's approval.
+**Resolved (orchestrator, 2026-11-07): garbage lightened to clear 3:1.** The first pass kept the
+approved `#4A4037` / `#3F362E` at 1.94:1 against the well, legible only through the 2 px bevel
+edge. The garbage **hole** is the one cell a player must find fast to dig out, so both were
+lightened one step — fill `#776A5D`, stripe `#6A5E52` — keeping the warm-gray hatch that reads as
+"dead" rows behind the saturated pieces. Same class of legibility fix as the L-piece colour-vision
+adjustment; the owner can revert.
 
 **Informational: ghost outline vs well** (piece colour at `--ghost-alpha`): I 3.91, O 5.15, T 3.15,
 S 2.78, Z 2.27, J 3.38, L 2.37. The ghost is a deliberate faint hint (design §7: about 55% opacity)

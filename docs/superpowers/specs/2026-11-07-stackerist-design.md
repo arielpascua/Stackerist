@@ -232,7 +232,7 @@ Approved mockups: `design/concept-art/prime-time-art.html` (home, game, win) and
 | Accent (stadium amber) | `#F5B700` |
 | Alert (garbage meter) | `#FF5A36` |
 | Board well / grid lines | `#0E0B08` / `#251F18` |
-| Pieces | I `#F5B700` · O `#E9E4D8` · T `#2FBF71` · S `#FF6A3D` · Z `#3D7BFF` · J `#C89BFF` · L `#00B3A4` · G `#4A4037` hatched |
+| Pieces | I `#F5B700` · O `#E9E4D8` · T `#2FBF71` · S `#FF6A3D` · Z `#3D7BFF` · J `#C89BFF` · L `#12978A` · G `#776A5D` hatched with `#6A5E52` (L and G adjusted in Wave 0 for colour-vision separation and hole contrast; `DESIGN.md` is authoritative for exact values) |
 | Block style | flat fill, 2px inset top highlight, 2px inset bottom shade |
 | Ghost | 2px inset outline in the piece color at ~55% opacity |
 | Display type | Big Shoulders Display 700/800/900 (names, numbers, banners) |
