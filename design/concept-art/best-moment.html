@@ -1,0 +1,77 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  .pt{--line:#3D3329;--tx:#F2EADF;--mu:#BCA98F;--acc:#F5B700;--r:3px;--disp:'Big Shoulders Display',sans-serif;--body:'Archivo',sans-serif;
+      color:var(--tx);font-family:var(--body);border-radius:12px;overflow:hidden;position:relative}
+  .pt *{box-sizing:border-box}
+  .win{min-height:600px;background:url(/files/pt-win.png) center/cover,#16130F;display:flex;align-items:center;justify-content:center;padding:36px 20px}
+  .res{background:rgba(14,11,8,.92);border:1px solid var(--line);border-top:4px solid var(--acc);padding:24px 28px 22px;width:min(640px,100%)}
+  .hd{text-align:center;margin-bottom:16px}
+  .final{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .headline{font-family:var(--disp);font-weight:900;font-style:italic;font-size:80px;line-height:.9;color:var(--acc);margin:6px 0 4px;text-shadow:5px 5px 0 #000}
+  .reason{font-size:14px}
+  .body{display:grid;grid-template-columns:1fr auto;gap:26px;align-items:start;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-bottom:18px}
+  .tbl{display:grid;grid-template-columns:1fr auto auto;gap:8px 16px;font-size:13px;color:var(--mu);align-content:start}
+  .tbl b{font-family:var(--disp);font-weight:800;font-size:18px;color:var(--tx);text-align:right}
+  .tbl .h{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;text-align:right}
+  .bm{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .bm .lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .bm .ttl{font-family:var(--disp);font-weight:900;font-style:italic;font-size:26px;line-height:1;background:var(--acc);color:#16130F;padding:4px 12px 4px 10px;transform:skewX(-12deg);box-shadow:4px 4px 0 #000}
+  .bm .cap{font-size:11px;color:var(--mu);letter-spacing:.06em}
+  .board{--cell:11px;display:grid;grid-template-columns:repeat(10,var(--cell));grid-auto-rows:var(--cell);gap:1px;background:#251F18;padding:1px;border:2px solid var(--line);position:relative}
+  .cell{background:#0E0B08}
+  .cell.c{background:var(--pc);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(0,0,0,.38)}
+  .cell.c.k-G{background:repeating-linear-gradient(135deg,#4A4037 0 2px,#3F362E 2px 4px)}
+  .cell.clr{box-shadow:0 0 0 1px rgba(245,183,0,.9),0 0 8px rgba(245,183,0,.65);filter:brightness(1.25)}
+  .cell.last{outline:2px solid #F2EADF;outline-offset:-2px}
+  .k-I{--pc:#F5B700}.k-O{--pc:#E9E4D8}.k-T{--pc:#2FBF71}.k-S{--pc:#FF6A3D}.k-Z{--pc:#3D7BFF}.k-J{--pc:#C89BFF}.k-L{--pc:#00B3A4}.k-G{--pc:#4A4037}
+  .btn{border-radius:var(--r);padding:12px 16px;font-weight:700;font-size:15px;text-align:center}
+  .btn.pri{background:var(--acc);color:#16130F;font-family:var(--disp);font-weight:900;font-size:22px;letter-spacing:.04em;line-height:1}
+  .btn.sec{border:1px solid var(--line);color:var(--tx)}
+  .acts{display:flex;gap:10px}.acts .btn{flex:1}
+  .notes{margin-top:1rem;font-size:.9rem;color:var(--text-secondary);line-height:1.55}
+</style>
+
+<h2>Win screen with your best combo moment</h2>
+<p class="subtitle">The board on the right is the exact moment of your best combo, rebuilt from what the server recorded: the 3 cleared rows glow amber, and the piece that finished it has a white outline.</p>
+
+<div class="pt win">
+  <div class="res">
+    <div class="hd">
+      <div class="final">Final</div>
+      <div class="headline">YOU WIN</div>
+      <div class="reason">Sam topped out at 04:51</div>
+    </div>
+    <div class="body">
+      <div class="tbl">
+        <span></span><span class="h">You</span><span class="h">Sam</span>
+        <span>Lines</span><b>48</b><b>31</b>
+        <span>Garbage sent</span><b>29</b><b>14</b>
+        <span>Garbage cancelled</span><b>7</b><b>3</b>
+        <span>Best combo</span><b>×6</b><b>×3</b>
+        <span>Pieces</span><b>131</b><b>124</b>
+      </div>
+      <div class="bm">
+        <div class="lbl">Your best moment</div>
+        <div class="ttl">COMBO ×6</div>
+        <div class="board" id="bm"></div>
+        <div class="cap">Triple · +5 sent · 04:12</div>
+      </div>
+    </div>
+    <div class="acts"><div class="btn pri">REMATCH</div><div class="btn sec">Back to home</div></div>
+  </div>
+</div>
+
+<p class="notes">The losing player sees the same card with "YOU LOSE" and their own best moment. Whether they get one is the question in the terminal.</p>
+
+<script>
+(function () {
+  var E='..........';
+  var R=[E,E,E,E,E,E,E,E,E,E,E,E,E,'.....SS...','J...SS..L.','JJJ.ZZ.LLI','TTOOZZJLLI','ZTOOJJJLLI','TZZSSOOLLI','GGGG.GGGGG'];
+  var cleared={16:1,17:1,18:1}, last={'9,15':1,'9,16':1,'9,17':1,'9,18':1};
+  var el=document.getElementById('bm');
+  for(var y=0;y<20;y++)for(var x=0;x<10;x++){var d=document.createElement('div'),ch=R[y][x],c='cell';
+    if(ch!=='.'){c+=' c k-'+ch;if(cleared[y])c+=' clr';if(last[x+','+y])c+=' last';}
+    d.className=c;el.appendChild(d);}
+})();
+</script>

@@ -1,0 +1,38 @@
+# dependencies & build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# test output
+test-results/
+playwright-report/
+reports/
+.stryker-tmp/
+
+# tooling scratch
+.superpowers/
+.playwright-mcp/
+.claude/worktrees/
+
+# cdt spec artifacts are regenerable from the design doc and flagged do-not-commit;
+# the build ledger is the durable gate record and IS committed.
+.claude/specs/*
+!.claude/specs/BUILD-LEDGER.md
+
+# env & OS
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.log
+
+# claude-dev-team per-session work files
+.claude/NEXT_PROMPT.md
+.claude/ROUTING.json
+.claude/TASK_BRIEF.md
+.claude/TASK_RESULT.json
+.claude/runtime/

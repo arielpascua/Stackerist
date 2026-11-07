@@ -1,0 +1,158 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  .pt{--bg:#16130F;--panel:#2A231B;--line:#3D3329;--tx:#F2EADF;--mu:#BCA98F;--acc:#F5B700;--alert:#FF5A36;--ok:#7BD88F;
+      --gridline:#251F18;--well:rgba(14,11,8,.92);--r:3px;--disp:'Big Shoulders Display',sans-serif;--body:'Archivo',sans-serif;
+      color:var(--tx);font-family:var(--body);border-radius:12px;overflow:hidden;position:relative;margin-bottom:.5rem}
+  .pt *{box-sizing:border-box}
+  .tag{font-size:.8rem;color:var(--text-secondary);margin:1.25rem 0 .4rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+  .bd{background:linear-gradient(rgba(22,19,15,.30),rgba(22,19,15,.72)),url(/files/pt-backdrop.png) center 30%/cover,#16130F}
+
+  /* HOME */
+  .home{min-height:540px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:40px 20px}
+  .logo{width:min(620px,92%);aspect-ratio:1536/330;background:url(/files/pt-logo.png) center 50.5%/100% auto no-repeat;mix-blend-mode:lighten}
+  .form{width:min(400px,100%);background:rgba(22,19,15,.82);border:1px solid var(--line);border-radius:6px;padding:22px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(4px)}
+  .lab{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .inp{background:#0E0B08;border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;color:var(--tx);font-size:15px}
+  .inp.code{font-family:var(--disp);font-weight:800;letter-spacing:.3em;font-size:20px;text-transform:uppercase;color:var(--mu)}
+  .btn{border-radius:var(--r);padding:12px 16px;font-weight:700;font-size:15px;text-align:center;cursor:pointer}
+  .btn.pri{background:var(--acc);color:#16130F;font-family:var(--disp);font-weight:900;font-size:22px;letter-spacing:.04em;line-height:1}
+  .btn.sec{border:1px solid var(--line);color:var(--tx)}
+  .or{display:flex;align-items:center;gap:10px;color:var(--mu);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .or:before,.or:after{content:'';flex:1;height:1px;background:var(--line)}
+  .row{display:flex;gap:8px}.row .inp{flex:1;min-width:0}
+
+  /* GAME */
+  .gm{--cell:22px;--mcell:13px;padding:16px 20px 14px}
+  .gm-top{display:flex;align-items:center;gap:18px;font-size:12px;color:var(--mu);margin-bottom:14px}
+  .gm-top .wm{width:180px;aspect-ratio:1536/330;background:url(/files/pt-logo.png) center 50.5%/100% auto no-repeat;mix-blend-mode:lighten;margin-right:auto}
+  .gm-top .code b{color:var(--tx);font-family:var(--disp);font-weight:800;font-size:16px;letter-spacing:.12em;margin-left:6px}
+  .gm-top .ping i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:middle}
+  .gm-top .leave{border:1px solid var(--line);padding:6px 14px;border-radius:var(--r);color:var(--tx);font-weight:600;background:rgba(22,19,15,.7)}
+  .arena{display:flex;align-items:flex-start;gap:24px;justify-content:center;flex-wrap:wrap}
+  .pname{font-family:var(--disp);font-weight:800;font-size:24px;margin:0 0 8px 16px;display:flex;align-items:baseline;gap:10px;line-height:1}
+  .pname small{font-family:var(--body);font-size:10px;letter-spacing:.16em;color:var(--mu);text-transform:uppercase;font-weight:600}
+  .opp .pname{font-size:17px}
+  .prow{display:flex;gap:8px;align-items:stretch}
+  .meter{width:8px;background:var(--panel);border-radius:4px;position:relative;overflow:hidden}
+  .meter i{position:absolute;left:0;right:0;bottom:0;background:var(--alert)}
+  .bwrap{position:relative}
+  .board{display:grid;grid-template-columns:repeat(10,var(--cell));grid-auto-rows:var(--cell);gap:1px;background:var(--gridline);padding:1px;border:2px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .opp .board{--cell:var(--mcell)}
+  .cell{background:var(--well)}
+  .cell.c{background:var(--pc);box-shadow:inset 0 2px 0 rgba(255,255,255,.32),inset 0 -2px 0 rgba(0,0,0,.38)}
+  .cell.c.k-G{background:repeating-linear-gradient(135deg,#4A4037 0 3px,#3F362E 3px 6px)}
+  .cell.gh{box-shadow:inset 0 0 0 2px var(--pc);opacity:.55}
+  .k-I{--pc:#F5B700}.k-O{--pc:#E9E4D8}.k-T{--pc:#2FBF71}.k-S{--pc:#FF6A3D}.k-Z{--pc:#3D7BFF}.k-J{--pc:#C89BFF}.k-L{--pc:#00B3A4}.k-G{--pc:#4A4037}
+  .side{display:flex;flex-direction:column;gap:10px;min-width:86px;padding-top:2px}
+  .opp .side{min-width:64px}
+  .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .mini{display:grid;grid-template-columns:repeat(4,10px);grid-auto-rows:10px;gap:1px;margin:3px 0 7px}
+  .mini .e{background:transparent}
+  .stat{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .stat b{display:block;font-family:var(--disp);font-size:22px;color:var(--tx);line-height:1.05;font-weight:800}
+  .opp .stat b{font-size:16px}
+  .mid{display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:70px;min-width:84px}
+  .mid .lv{font-size:10px;letter-spacing:.16em;color:var(--mu);text-transform:uppercase;font-weight:600}
+  .mid .lvn{font-family:var(--disp);font-weight:800;font-size:30px;line-height:1}
+  .vs{font-family:var(--disp);font-weight:900;font-style:italic;font-size:44px;color:var(--acc);line-height:1}
+  .clock{background:#0B0907;border:1px solid var(--line);font-family:var(--disp);font-weight:800;color:var(--acc);font-size:28px;padding:4px 10px;letter-spacing:.06em;line-height:1}
+  .combo{position:absolute;z-index:3;white-space:nowrap;left:-14px;top:118px;background:var(--acc);color:#16130F;font-family:var(--disp);font-weight:900;font-size:30px;line-height:1;padding:6px 16px 6px 12px;transform:skewX(-12deg);box-shadow:5px 5px 0 #000}
+  .combo span{display:block;font-size:11px;letter-spacing:.08em;font-weight:600;font-family:var(--body);color:#3A2C00}
+  .legend{margin-top:14px;font-size:11px;color:var(--mu);display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .legend kbd{font-family:var(--body);font-size:11px;border:1px solid var(--line);border-radius:var(--r);padding:1px 6px;color:var(--tx);margin-right:4px;background:rgba(22,19,15,.7)}
+
+  /* RESULT */
+  .win{min-height:540px;background:url(/files/pt-win.png) center/cover,#16130F;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+  .res{background:rgba(14,11,8,.9);border:1px solid var(--line);border-top:4px solid var(--acc);padding:26px 30px 24px;width:min(440px,100%);text-align:center}
+  .final{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--mu);font-weight:600}
+  .headline{font-family:var(--disp);font-weight:900;font-style:italic;font-size:84px;line-height:.9;color:var(--acc);letter-spacing:-.01em;margin:6px 0 4px;text-shadow:5px 5px 0 #000}
+  .reason{color:var(--tx);font-size:14px;margin-bottom:18px}
+  .tbl{display:grid;grid-template-columns:1fr auto auto;gap:6px 18px;text-align:left;font-size:13px;color:var(--mu);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:18px}
+  .tbl b{font-family:var(--disp);font-weight:800;font-size:18px;color:var(--tx);text-align:right}
+  .tbl .h{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;text-align:right}
+  .acts{display:flex;gap:10px}.acts .btn{flex:1}
+</style>
+
+<h2>Prime Time, with the generated art in place</h2>
+<p class="subtitle">The logo, arena backdrop and win art come from gpt-image. Everything else is real layout in the Prime Time palette. Tell me in the terminal what to keep, change or drop.</p>
+
+<div class="tag">1 · Home</div>
+<div class="pt bd home">
+  <div class="logo" role="img" aria-label="Stackerist"></div>
+  <div class="form">
+    <div class="lab">Your name</div>
+    <div class="inp">Ariel</div>
+    <div class="btn pri">CREATE GAME</div>
+    <div class="or">or join a friend</div>
+    <div class="row"><div class="inp code">K7QM4X</div><div class="btn sec">Join</div></div>
+  </div>
+</div>
+
+<div class="tag">2 · Game</div>
+<div class="pt bd gm" id="game">
+  <div class="gm-top">
+    <div class="wm" role="img" aria-label="Stackerist"></div>
+    <div class="code">ROOM<b>K7QM4X</b></div>
+    <div class="ping"><i></i>38 ms</div>
+    <div class="leave">Leave</div>
+  </div>
+  <div class="arena">
+    <div class="own">
+      <div class="pname">Ariel <small>You</small></div>
+      <div class="prow">
+        <div class="meter"><i style="height:10%"></i></div>
+        <div class="bwrap"><div class="board" data-b="own"></div><div class="combo">COMBO ×4<span>+2 SENT · 1 CANCELLED</span></div></div>
+        <div class="side">
+          <div class="lbl">Next</div>
+          <div class="mini" data-k="T"></div><div class="mini" data-k="S"></div><div class="mini" data-k="O"></div><div class="mini" data-k="L"></div><div class="mini" data-k="Z"></div>
+          <div class="stat">Lines<b>34</b></div><div class="stat">Sent<b>21</b></div><div class="stat">Pieces<b>96</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="mid"><div class="vs">VS</div><div class="lv">Speed</div><div class="lvn">6</div><div class="clock">03:12</div></div>
+    <div class="opp">
+      <div class="pname">Sam <small>Opponent</small></div>
+      <div class="prow">
+        <div class="meter"><i style="height:0%"></i></div>
+        <div class="bwrap"><div class="board" data-b="opp"></div></div>
+        <div class="side"><div class="lbl">Next</div><div class="mini" data-k="J"></div>
+          <div class="stat">Lines<b>22</b></div><div class="stat">Sent<b>9</b></div><div class="stat">Pieces<b>91</b></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend"><span><kbd>←</kbd><kbd>→</kbd>move</span><span><kbd>↑</kbd><kbd>X</kbd>rotate</span><span><kbd>Z</kbd>rotate back</span><span><kbd>↓</kbd>soft drop</span><span><kbd>Space</kbd>hard drop</span></div>
+</div>
+
+<div class="tag">3 · Result (win)</div>
+<div class="pt win">
+  <div class="res">
+    <div class="final">Final</div>
+    <div class="headline">YOU WIN</div>
+    <div class="reason">Sam topped out at 04:51</div>
+    <div class="tbl">
+      <span></span><span class="h">You</span><span class="h">Sam</span>
+      <span>Lines</span><b>48</b><b>31</b>
+      <span>Garbage sent</span><b>29</b><b>14</b>
+      <span>Best combo</span><b>×6</b><b>×3</b>
+      <span>Pieces</span><b>131</b><b>124</b>
+    </div>
+    <div class="acts"><div class="btn pri">REMATCH</div><div class="btn sec">Back to home</div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var E = '..........';
+  var OWN = [E,E,E,E,E,E,E,E,E,E,E,E,E,'...T..OO..','J.TTT.OO..','JJJSSZZLL.','IZZSSTTLL.','ITZZJJJOO.','GGG.GGGGGG','GGG.GGGGGG'];
+  var OPP = [E,E,E,E,E,E,E,E,E,'...S......','..SS....JJ','I.S..ZZ.J.','I.LL..ZZJ.','I..L.TTT..','I..LOOT.SS','GGGGGG.GGG','GGGGGG.GGG','GGGGGG.GGG','GGGG.GGGGG','GGGG.GGGGG'];
+  var SH = {I:[[0,0],[1,0],[2,0],[3,0]],O:[[1,0],[2,0],[1,1],[2,1]],T:[[1,0],[0,1],[1,1],[2,1]],S:[[1,0],[2,0],[0,1],[1,1]],Z:[[0,0],[1,0],[1,1],[2,1]],J:[[0,0],[0,1],[1,1],[2,1]],L:[[2,0],[0,1],[1,1],[2,1]]};
+  function idx(l){var m={};l.forEach(function(c){m[c[1]*10+c[0]]=c[2];});return m;}
+  function board(el,rows,act,gh){var a=idx(act||[]),g=idx(gh||[]);for(var y=0;y<20;y++)for(var x=0;x<10;x++){var d=document.createElement('div'),i=y*10+x,ch=rows[y][x];d.className=a[i]?'cell c k-'+a[i]:ch!=='.'?'cell c k-'+ch:g[i]?'cell gh k-'+g[i]:'cell';el.appendChild(d);}}
+  function mini(el,k){var on={};SH[k].forEach(function(c){on[c[1]*4+c[0]]=1;});for(var i=0;i<8;i++){var d=document.createElement('div');d.className=on[i]?'cell c k-'+k:'e';el.appendChild(d);}}
+  var g=document.getElementById('game');
+  board(g.querySelector('[data-b="own"]'),OWN,[[9,3,'I'],[9,4,'I'],[9,5,'I'],[9,6,'I']],[[9,14,'I'],[9,15,'I'],[9,16,'I'],[9,17,'I']]);
+  board(g.querySelector('[data-b="opp"]'),OPP,[[4,1,'T'],[3,2,'T'],[4,2,'T'],[5,2,'T']],null);
+  g.querySelectorAll('.mini').forEach(function(m){mini(m,m.getAttribute('data-k'));});
+})();
+</script>
