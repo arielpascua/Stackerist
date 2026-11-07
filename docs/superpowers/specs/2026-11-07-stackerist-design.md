@@ -44,7 +44,7 @@ cancelling; a best-moment highlight on the result screen; rematch, preview, ghos
 
 **Non-goals (future work, list in README):** accounts, matchmaking, persistence/database, hold
 piece, T-spin bonuses, back-to-back bonuses, mobile touch controls, horizontal scaling, handicaps,
-"save best moment as image", sound (pending Q5).
+"save best moment as image", sound effects beyond the music (Q5).
 
 > Changed from the source spec: **combo bonuses and garbage cancelling are now IN scope** (Ariel,
 > 2026-11-07). T-spin and back-to-back stay out (default proposed, not objected to).
@@ -60,6 +60,7 @@ piece, T-spin bonuses, back-to-back bonuses, mobile touch controls, horizontal s
 | Look | **Prime Time** — sports-broadcast scoreboard direction (§7). Approved "good for the UI for now". |
 | Generated art | Logo, arena backdrop and win-screen art from `gpt-image-bridge`, approved. Kept in `design/concept-art/`. |
 | Best moment | On the result screen **both** players see their own best combo moment (§5.4). |
+| Signature features | **Duel identity** (standoff countdown ending on DUEL!, garbage projectiles, danger pulse, music that speeds up), a **post-match report** with a stack-height chart, and **best-of-3 series** (rounds 1 to 3). Name stays **Stackerist**. (§5.6, §6.2; Ariel, 2026-11-07) |
 | Netcode at top speed | **Smart prediction** (§6.1): the client runs its own board slightly ahead and stamps each input with the tick it was made for, so moves land where the player saw them at every speed level. Chosen after the builder check showed level 12 would otherwise land moves 3–5 rows low. |
 
 ## 4. My calls (builder defaults — check these)
@@ -138,6 +139,26 @@ On lock, in this exact order:
 `PlayerState` adds `combo: number`, `bestCombo: number`, `garbageCancelled: number`,
 `bestMoment: BestMoment | null`. All still pure, integer-only, never mutated.
 
+### 5.6 Best-of-3 series (server-side, outside the engine)
+- Every room plays a **series**: rounds 1, 2 and 3 if needed; the first player to **2 round wins**
+  takes the series.
+- A **drawn round** (both top out in the same tick) is replayed and counts for nobody; its round
+  number is reused ("Round 2 · replay"), so a series still ends when someone reaches 2 wins.
+- Between rounds both players press **Next round**; the next round gets new seeds and starts with
+  the standoff countdown. After the series, **New series** (both accept) resets the score to 0–0.
+  This replaces the single rematch (N1).
+- **Leaving** or running out the disconnect grace forfeits the **whole series** to the opponent.
+- The **3-pause limit** applies per player per **series**.
+- Each round's result carries that round's stats, report (§6.2) and best moment.
+
+### 5.7 Round report data (recorded by the server)
+Per player per round: `piecesPlaced`, `actions` (inputs accepted and applied), `garbageSent`,
+`garbageReceived` (rows the opponent routed to this player, whether later cancelled, inserted or
+still pending), `garbageCancelled`, `durationTicks` (playing ticks only, pauses excluded), and
+`heightSamples` — the stack height (rows from the floor to the highest filled cell, 0–20) sampled
+every **30 ticks**. Derived on the client: **PPS** = `piecesPlaced / (durationTicks / 60)`;
+**APM** = `actions × 60 / (durationTicks / 60)`.
+
 ## 6. Server, protocol, client
 
 - **Server:** source spec §4 in full (rooms/codes/tokens §4.1, match loop §4.2, information hiding
@@ -175,6 +196,24 @@ On lock, in this exact order:
   the snapshot to `targetTick`, and snap to the result (no smoothing — snapping is honest).
 - **Pause/resume.** While paused the client stops advancing; `resumed.tick` resynchronizes it.
 - **Opponent board:** drawn straight from snapshots, no prediction (unchanged).
+
+### 6.2 Duel identity and the post-match report (client)
+The broadcast is covering a duel: Prime Time stays the look, the duel is the event.
+- **Standoff countdown:** boards dim, the two name plates face off, `3 · 2 · 1` then **DUEL!**
+  slams in. Total length stays 3 s; input goes live at the instant DUEL! appears.
+- **Garbage projectile:** each sent attack (the leftover after cancelling) flies as an amber
+  projectile from the sender's board to the receiver's garbage meter (~350 ms), sized by rows.
+  Cancelled rows burst out of the defender's meter. Driven by attack/cancel events the server adds
+  to snapshots — visual only, it reveals nothing the opponent view doesn't already show.
+- **Danger pulse:** a board's frame pulses red while stack height + pending garbage ≥ 16 rows
+  (within 4 of the top). Shown on both boards. Reduced motion → steady red frame.
+- **Music:** an original soundtrack synthesized in the browser (Web Audio, no audio files, no
+  licensing), tempo stepping up with each speed level; starts at DUEL!; mute button + `M` key,
+  remembered per browser (on by default).
+- **Post-match report** on each round's result: PPS, APM, garbage sent / received / cancelled,
+  lines, best combo, and a small line chart of both players' stack height over match time (chart
+  spec from the `dataviz` skill, colors from the design tokens). Round number and series score are
+  visible on the game screen, lobby, result card and to spectators.
 - **Robustness:** every WebSocket message handler and HTTP route is wrapped so one bad request
   cannot crash the process (and with it every live match); a process-level `unhandledRejection`
   logger is installed. A malformed path such as `/g/%` returns an error page, not a crash.
@@ -258,7 +297,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 ### Leaving and disconnects
 - REQ-030: The system must treat an explicit leave as an immediate forfeit in which the opponent wins with reason OPPONENT_LEFT.
 - REQ-031: The system must pause the match for both players on an unexpected disconnect (socket closed, or no pong for 10 s with pings every 3 s), show the opponent a live 20-second countdown, and resume from the exact paused state after a 3-second countdown when the player rejoins with their seat token within 20 s.
-- REQ-032: The system must allow each player at most 3 pauses per match, and a 4th disconnect or an expired grace period must forfeit the match with reason OPPONENT_DISCONNECTED.
+- REQ-032: The system must allow each player at most 3 pauses per series, and a 4th disconnect or an expired grace period must forfeit with reason OPPONENT_DISCONNECTED.
 - REQ-033: The system must keep the match paused when both players disconnect, forfeit whichever player's grace expires first, and end the room as abandoned when both expire together.
 - REQ-034: The system must return the room to waiting when a player disconnects during waiting or countdown, and hold that seat for its token for 2 minutes.
 - REQ-035: The system must let a reconnect with a valid seat token replace any older socket for that seat, closing the old socket with reason REPLACED.
@@ -275,14 +314,14 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-044: The system must trim player names, require 1 to 16 characters, and render names only as text, never through innerHTML.
 
 ### Protocol
-- REQ-045: The system must define every message in source spec §5, plus the input tick stamp, the ping rtt, the countdown and resumed start tick, the combo field and the gameOver stats in this document, as TypeScript types and zod schemas in packages/protocol shared by client and server, with no use of any.
+- REQ-045: The system must define every message in source spec §5, plus the input tick stamp, the ping rtt, the countdown and resumed start tick, the combo field, the snapshot attack and cancel events, the round and series fields, the round report and the gameOver stats in this document, as TypeScript types and zod schemas in packages/protocol shared by client and server, with no use of any.
 - REQ-046: The system must include, for each seat, lines cleared, garbage sent, garbage cancelled, pieces placed, best combo and best moment in the gameOver message.
 
 ### Client
 - REQ-047: The system must provide a home screen with a name field, a Create game button, and a join code field with a Join button, and opening /g/:code must pre-fill the code and focus the name field.
 - REQ-048: The system must provide a lobby showing the large room code, a Copy link button that shows "Copied!", the text "Waiting for opponent…" and the list of players.
 - REQ-049: The system must provide a game screen with the player's own board large, the opponent's board at about 60% size beside it, names above each board, a pending-garbage meter beside each board, stats, the speed level, a connection dot with ping in milliseconds, and a Leave button with a confirm step.
-- REQ-050: The system must show overlays for the 3-2-1 countdown, the opponent-disconnected state with a live seconds timer, and the result ("You win", "You lose" or "Draw") with the reason, both players' stats, a Rematch button and a Back to home button.
+- REQ-050: The system must show overlays for the countdown, the opponent-disconnected state with a live seconds timer, and each round's result ("You win", "You lose" or "Draw") with the reason, the series score, both players' stats, a Next round or New series button and a Back to home button.
 - REQ-051: The system must show each player their own best moment on the result screen, drawn from the server-recorded data with the cleared rows highlighted and the finishing piece outlined, and must hide that panel when the player cleared no lines.
 - REQ-052: The system must show a combo callout on a player's board whenever that player's combo reaches 2 or more.
 - REQ-053: The system must implement the keyboard controls in source spec §6.2 with client-side DAS of 170 ms and ARR of 50 ms, ignore operating-system key repeat, send softDropStop on key release and on window blur, prevent page scrolling on game keys, and show a controls legend.
@@ -293,7 +332,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-058: The system must warn a touch-only device before it takes a seat and offer to watch instead, treat any physical key press as proof of a keyboard, and keep home and lobby usable at 390 px wide without horizontal scrolling.
 
 ### Nice-to-haves (build only after REQ-001–REQ-058 pass)
-- REQ-059: The system must offer a rematch after game over that starts only when both players accept, generating new seeds while keeping seats, room and code, running the 3-second countdown, showing "Waiting for opponent to accept…" meanwhile, and showing "Opponent left" with a disabled button if the opponent has gone.
+- REQ-059: The system must offer Next round after a round and New series after a series, each starting only when both players accept, generating new seeds while keeping seats, room and code, running the countdown, showing "Waiting for opponent to accept…" meanwhile, and showing "Opponent left" with a disabled button if the opponent has gone.
 - REQ-060: The system must show the next 5 pieces beside the player's own board and the next 1 piece beside the opponent's board.
 - REQ-061: The system must draw a translucent ghost piece at ghostPosition on the player's own board.
 - REQ-062: The system must let a third joiner, or anyone opening /g/CODE?watch=1, watch both boards read-only with names, and show the players a spectator count.
@@ -326,6 +365,18 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-081: The system must allow at most one live room per connection, at most 10 room creations and 20 failed joins per minute per client IP resolved through Railway's proxy hops, and at most 500 live rooms, replying with an error message whenever a limit is hit.
 - REQ-082: The system must have a server integration test with 150 ms of injected round-trip latency at the top speed level proving that tick-stamped moves from a predicting client lock in exactly the cells that client displayed.
 
+### Signature features (Ariel, 2026-11-07; build after REQ-001–REQ-058 pass, with the nice-to-haves)
+- REQ-083: The system must play every room as a best-of-3 series in which the first player to win 2 rounds wins the series, a drawn round is replayed without counting, and both players must press Next round before the next round's countdown starts with new seeds.
+- REQ-084: The system must award the whole series to the opponent when a player leaves or runs out their disconnect grace period, and must show a series-winner screen with the final score, each round's result and a New series button that restarts at 0–0 once both players accept.
+- REQ-085: The system must show the current round number and the series score on the game screen, in the lobby, on the result card and to spectators.
+- REQ-086: The system must run a standoff countdown in which the two name plates face off, the count runs 3, 2, 1 and ends on "DUEL!" at the exact moment play starts, without delaying the first input.
+- REQ-087: The system must animate every sent attack as a projectile flying from the sender's board to the receiver's garbage meter, sized by its row count, and show cancelled rows bursting out of the defender's meter, driven only by attack and cancel events from server snapshots.
+- REQ-088: The system must pulse a board's frame red while that board's stack height plus its pending garbage is 16 rows or more, on both the own board and the opponent's board, and show a steady red frame instead of a pulse under reduced motion.
+- REQ-089: The system must play an original soundtrack synthesized in the browser with no audio files, whose tempo rises with each speed level, starting at "DUEL!", with a mute button and an M-key toggle that each browser remembers.
+- REQ-090: The system must record on the server, for each player in each round, pieces placed, accepted actions, garbage sent, received and cancelled, playing ticks, and the stack height every 30 ticks, and send them with the round result.
+- REQ-091: The system must show a post-match report with pieces per second, actions per minute, garbage sent, received and cancelled, and a line chart of both players' stack height over match time.
+- REQ-092: The system must have tests for series scoring (two wins end the series, a draw is replayed, a forfeit ends the series), for the report statistics, and for the stack-height sampling.
+
 ## 10. Left to the builder
 
 Internal module structure beyond the source spec's layout; exact canvas animation curves within the
@@ -340,7 +391,7 @@ named here; how the transparent logo is produced; CI caching; test helper design
 | Q2 | Which Railway region? Lag depends on the distance to the server. | **Southeast Asia (Singapore).** |
 | Q3 | Room-creation flooding (the source spec is silent; the site is public). | One live room per connection; at most 10 creates per minute per IP (counting Railway's proxy hops correctly); a 500-live-room cap answering `error: SERVER_BUSY`. |
 | Q4 | Name filtering for kids' names? | None: names are only seen by people who joined with the private code. Future work. |
-| Q5 | Sound effects? | Not in this build; decide after first play. Future work. |
+| Q5 | Sound effects? | **Music is in** (REQ-089, Ariel 2026-11-07). Other sound effects stay future work. |
 | Q6 | GitHub repo for CI? There is no remote yet. | **Yes: a private GitHub repo**, pushed so the workflow runs there. Railway deploys from this machine. |
 | Q7 | REFERENCE product to beat (design gate). | `tetr.io` — scoped to in-match HUD clarity: reading incoming garbage, combo/attack feedback and the opponent's board at a glance. |
 | Q8 | Build budget. | **Full workflow, every gate.** Stop at each gate result and before shipping. |
