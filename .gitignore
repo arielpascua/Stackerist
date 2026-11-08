@@ -36,3 +36,8 @@ Thumbs.db
 .claude/TASK_BRIEF.md
 .claude/TASK_RESULT.json
 .claude/runtime/
+
+# impeccable downloads its platform binary on first run (verified against engine-checksums.txt)
+.claude/skills/impeccable/scripts/bin/
+# impeccable agent definitions (not used by this repo)
+.claude/agents/
