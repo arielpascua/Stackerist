@@ -1,7 +1,10 @@
 /**
- * @stackerist/engine — pure, deterministic rules engine (milestone 1 placeholder).
+ * @stackerist/engine — pure, deterministic rules engine.
  *
  * Rules: no I/O, no Date, no Math.random, no floats in game state, never mutate inputs.
- * The real modules (types, pieces, srs, board, rng, bag, player, garbage, config) land in milestone 2.
+ * W1a checkpoint: types and config from docs/architecture.md §2.2–2.3. The rule modules land in W1b.
  */
+export * from './types.js';
+export * from './config.js';
+
 export const ENGINE_VERSION = '0.0.0';
