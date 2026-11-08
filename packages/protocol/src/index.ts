@@ -1,5 +1,15 @@
 /**
- * @stackerist/protocol — WebSocket message types and zod schemas shared by client and server
- * (milestone 1 placeholder; messages and schemas land with the protocol milestone).
+ * @stackerist/protocol — the WebSocket contract shared by client and server (architecture §3):
+ * constants, zod schemas and their inferred types, codes and links, parsing, the information-hiding
+ * views and the client's tick estimator. `typeAssertions.ts` is compile-time only and exports nothing
+ * at runtime. `predict.ts` lands after the engine merges.
  */
 export const PROTOCOL_VERSION = 1;
+
+export * from './constants.js';
+export * from './schemas.js';
+export type * from './messages.js';
+export * from './codes.js';
+export * from './parse.js';
+export * from './views.js';
+export * from './clock.js';
