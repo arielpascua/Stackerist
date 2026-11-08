@@ -1823,3 +1823,11 @@ jsdom or happy-dom, sharp, `@fastify/rate-limit`, eslint-config-prettier (Pretti
 - **OQ-5 — Ariel: the 200-drop RATE_LIMITED counter runs across the whole series** (REQ-038 reworded), matching the per-series pause cap.
 - **OQ-6 — Ariel: cleared-row flash on the own board only.** No `clear` snapshot event; decision 34 stands.
 - **R12** (`[data-overlay]` geometry exclusion) — decided at W3 when the probe exists: accepted only if overlay content is still measured for its own overflow.
+
+### 10.2 Rulings on gaps found by PRO in W1b (orchestrator, 2026-11-08)
+- **G1 — forfeit between rounds.** No round is in progress, so **no `RoundSummary` is appended**; `RoundSummary.durationTicks` stays a plain `number`. `applyForfeit(…, durationTicks: null)` means "no round to summarise". SRV implements; series tests cover it (REQ-092).
+- **G2 — `views.ts` pending total.** PRO switches its local loop to the engine's `pendingTotal` in W1c, together with `predict.ts`.
+- **G3 — error copy.** DESIGN.md has no copy for `BAD_SEQ`, `NOT_IN_ROOM`, `NOT_FINISHED`, `ALREADY_IN_ROOM`, `INTERNAL_ERROR` or the `ROOM_CLOSED` close, and its `ROOM_FULL` copy ("already has two players") is wrong now that a full room means **2 players + 8 spectators** (a third player becomes a spectator). UI writes these in `ui/copy.ts` in DESIGN.md's voice (name the problem **and** the recovery). `ROOM_FULL`: "This room is full — two players and eight spectators are already in. Ask for a new game code." The internal codes (`BAD_SEQ`, `NOT_FINISHED`, `INTERNAL_ERROR`) get one generic recoverable line ("Something went wrong on our side. Reload to rejoin.") and are logged, not explained.
+- **G4 — catch-up during a countdown.** A spectator who joins, or a player who rejoins, while the room is in `countdown` (or a resume countdown) must also receive the current `countdown` (or `resumed`) message as part of catch-up, so the client has a clock anchor. No protocol change; SRV implements, with an integration test.
+- **G5 — name length unit.** zod 4.6.7 counts code points, so 16 emoji is a valid name. The UI validates names only via `NameSchema`, never `.length`.
+- **Process.** Agent worktrees are created from `main`, not the current branch: every contract now starts with `git merge --ff-only <base commit>` and a check that `git log -1` shows it.
