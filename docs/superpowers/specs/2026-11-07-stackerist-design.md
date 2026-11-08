@@ -299,13 +299,13 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-031: The system must pause the match for both players on an unexpected disconnect (socket closed, or no pong for 10 s with pings every 3 s), show the opponent a live 20-second countdown, and resume from the exact paused state after a 3-second countdown when the player rejoins with their seat token within 20 s.
 - REQ-032: The system must allow each player at most 3 pauses per series, and a 4th disconnect or an expired grace period must forfeit with reason OPPONENT_DISCONNECTED.
 - REQ-033: The system must keep the match paused when both players disconnect, forfeit whichever player's grace expires first, and end the room as abandoned when both expire together.
-- REQ-034: The system must return the room to waiting when a player disconnects during waiting or countdown, and hold that seat for its token for 2 minutes.
+- REQ-034: The system must return the room to waiting when a player disconnects during waiting or countdown, and hold that seat for its token for 2 minutes, and when a player disconnects between rounds of a series it must hold the seat for 2 minutes without using a pause and then award the series to the opponent.
 - REQ-035: The system must let a reconnect with a valid seat token replace any older socket for that seat, closing the old socket with reason REPLACED.
 
 ### Anti-cheat
 - REQ-036: The system must have no client message that carries game state, and the server must compute every board, line clear and attack itself.
 - REQ-037: The system must run gravity and lock delay on the server clock, and a client's tick stamp may only schedule its own input for the current or a later server tick, never an earlier one.
-- REQ-038: The system must rate-limit each player's inputs with a token bucket of 30 actions per second sustained and a burst of 20, charged once when the message is received and before it is queued, dropping and counting over-limit actions, and disconnecting the player with RATE_LIMITED after 200 drops in a match.
+- REQ-038: The system must rate-limit each player's inputs with a token bucket of 30 actions per second sustained and a burst of 20, charged once when the message is received and before it is queued, dropping and counting over-limit actions, and disconnecting the player with RATE_LIMITED after 200 drops counted across the whole series.
 - REQ-039: The system must reject frames larger than 1 KB and zod-validate every message, replying error BAD_MESSAGE to any invalid or unknown message and disconnecting a client after 20 bad messages.
 - REQ-040: The system must bind a seat to its socket only after a seat-token check that uses crypto.timingSafeEqual, and apply that socket's actions only to its own seat.
 - REQ-041: The system must reject any input whose seq is not strictly greater than the last accepted seq for that seat.
@@ -335,7 +335,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-059: The system must offer Next round after a round and New series after a series, each starting only when both players accept, generating new seeds while keeping seats, room and code, running the countdown, showing "Waiting for opponent to accept…" meanwhile, and showing "Opponent left" with a disabled button if the opponent has gone.
 - REQ-060: The system must show the next 5 pieces beside the player's own board and the next 1 piece beside the opponent's board.
 - REQ-061: The system must draw a translucent ghost piece at ghostPosition on the player's own board.
-- REQ-062: The system must let a third joiner, or anyone opening /g/CODE?watch=1, watch both boards read-only with names, and show the players a spectator count.
+- REQ-062: The system must let a third joiner, or anyone opening /g/CODE?watch=1, watch both boards read-only with names, allow at most 8 spectators per room and answer any further spectator with ROOM_FULL, and show the players a spectator count.
 
 ### Tests
 - REQ-063: The system must have engine unit tests for every case listed in source spec §8.1 using parseBoard fixtures, with case 24 changed to "pending garbage is inserted only on a non-clearing lock, after line clears and before spawn", plus the fast-check property test from source spec §8.1.
