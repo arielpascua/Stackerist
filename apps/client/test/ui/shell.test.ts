@@ -12,7 +12,7 @@ import { COPY } from '../../src/ui/copy.ts';
 import { isApplePlatform, isTouchOnly, KeyboardProof } from '../../src/ui/device.ts';
 import { presentClose, presentError } from '../../src/ui/errors.ts';
 import { formatClock, formatTicks, secondsLeft } from '../../src/ui/format.ts';
-import { fitScale, legendIsShort } from '../../src/ui/layout.ts';
+import { fitScale, HIT_MIN_PX, hitBleedPx, legendIsShort } from '../../src/ui/layout.ts';
 import { rememberState } from '../../src/ui/memory.ts';
 import { entranceDelayMs } from '../../src/ui/screens/ResultCard.tsx';
 import { makeClientState, makeRoom } from './fixtures.ts';
@@ -164,6 +164,30 @@ describe('REQ-056 the game screen fits 1280×600 and scales down below it', () =
   it('REQ-056 below 1100 px the legend drops M and Esc', () => {
     expect(legendIsShort(1099)).toBe(true);
     expect(legendIsShort(1280)).toBe(false);
+  });
+});
+
+describe('REQ-050 result card buttons keep a 44 px tap height when the card is scaled down', () => {
+  it('REQ-050 no bleed at full size, so the 1280×600 layout is untouched', () => {
+    expect(hitBleedPx(1)).toBe(0);
+  });
+
+  it('REQ-050 the scaled hit area (box + bleed on both sides) is at least 44 px on screen', () => {
+    for (const scale of [0.95, 0.87, 0.75, 0.56, 0.4]) {
+      const cssHeight = HIT_MIN_PX + 2 * hitBleedPx(scale);
+      expect(cssHeight * scale).toBeGreaterThanOrEqual(HIT_MIN_PX - 1e-9);
+    }
+  });
+
+  it('REQ-050 a short box still reaches 44 px', () => {
+    const bleed = hitBleedPx(0.87, 38);
+    expect((38 + 2 * bleed) * 0.87).toBeCloseTo(HIT_MIN_PX, 6);
+  });
+
+  it('REQ-050 a bad scale never produces a negative or infinite bleed', () => {
+    expect(hitBleedPx(0)).toBe(0);
+    expect(hitBleedPx(Number.NaN)).toBe(0);
+    expect(hitBleedPx(2)).toBe(0);
   });
 });
 

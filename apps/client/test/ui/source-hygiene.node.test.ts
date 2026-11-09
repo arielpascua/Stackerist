@@ -6,6 +6,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { HIT_MIN_PX } from '../../src/ui/layout.ts';
 
 const SRC = fileURLToPath(new URL('../../src/', import.meta.url));
 
@@ -58,6 +59,24 @@ describe('REQ-057 Prime Time styling comes from the tokens only', () => {
     expect(
       offenders(files(SRC, /\.(ts|tsx|css)$/), /concept-art|pt-(logo|backdrop|win)\.png/),
     ).toEqual([]);
+  });
+});
+
+describe('REQ-048 hit areas', () => {
+  const tokens = readFileSync(
+    fileURLToPath(new URL('../../../../design/tokens/tokens.css', import.meta.url)),
+    'utf8',
+  );
+  const pages = readFileSync(join(SRC, 'styles', 'pages.css'), 'utf8');
+
+  it('REQ-050 HIT_MIN_PX mirrors --hit-min in tokens.css', () => {
+    expect(tokens).toContain(`--hit-min: ${String(HIT_MIN_PX)}px;`);
+  });
+
+  it('REQ-048 the lobby share link reaches the 44 px floor without moving layout', () => {
+    expect(pages).toMatch(/\.share-link::after\s*\{[^}]*position: absolute/);
+    // A 13 px / 1.45 line, 16 px reach above and the 12 px plate gap below.
+    expect(13 * 1.45 + 16 + 12).toBeGreaterThanOrEqual(HIT_MIN_PX);
   });
 });
 

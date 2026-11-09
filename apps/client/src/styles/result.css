@@ -244,6 +244,22 @@
   gap: var(--space-3);
 }
 
+/*
+ * The card scales as a whole on small screens, which shrinks its 44 px buttons. Each button's hit area
+ * reaches past its box by the amount the scale took away (--result-hit-bleed, set from the scale in
+ * ResultCard), so the tappable height stays at --hit-min. Zero at full size: the layout is untouched.
+ */
+.result-card__actions .btn {
+  position: relative;
+}
+
+.result-card__actions .btn::after {
+  content: '';
+  position: absolute;
+  inset-block: calc(var(--result-hit-bleed, 0px) * -1);
+  inset-inline: 0;
+}
+
 .result-card__status {
   flex: 1 1 auto;
   min-width: 0;
