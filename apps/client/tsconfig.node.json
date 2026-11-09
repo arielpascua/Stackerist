@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../tsconfig.base.json",
-  // Vite / Vitest config files (run in Node).
+  // Vite / Vitest config files and Node-only source scans (run in Node).
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -10,5 +10,5 @@
     "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
   },
-  "include": ["vite.config.ts", "vitest.config.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "test/**/*.node.test.ts"]
 }

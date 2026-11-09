@@ -13,6 +13,8 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
+  // Source scans read files with Node APIs; they typecheck under tsconfig.node.json.
+  "exclude": ["test/**/*.node.test.ts"],
   "references": [
     { "path": "../../packages/engine/tsconfig.lib.json" },
     { "path": "../../packages/protocol/tsconfig.lib.json" }

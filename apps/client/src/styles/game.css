@@ -1,0 +1,585 @@
+/*
+ * The game screen (DESIGN.md "Game screen: 1280×600 minimum, no scrolling"). Vertical stack: padding
+ * 12, top bar 40, gap 12, name-plate row 32, board, gap 12, legend 24, padding 12 (the 152 px chrome
+ * in computeCellSizes). Columns: own side 96, VS 112, opponent side 72, 32 px gaps. Below the 12 px
+ * cell floor the stage scales uniformly from the top centre; the page never scrolls.
+ */
+
+.game {
+  /* Column widths from DESIGN.md "Layout" (they sum into --layout-chrome-h). */
+  --side-own: 96px;
+  --side-opp: 72px;
+  --vs-col: 112px;
+  --logo-hud: 160px;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--page-pad);
+  overflow: hidden;
+}
+
+.game__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-backdrop);
+  background: url('../../../../design/assets/backdrop.webp') center 30% / cover no-repeat
+    var(--color-bg);
+}
+
+/* One flat scrim, measured so tan labels stay above 4.5:1 over the floodlights (DESIGN.md). */
+.game__backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-game);
+}
+
+/* ---- Top bar ---- */
+
+.topbar {
+  position: relative;
+  z-index: var(--z-hud);
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--space-10);
+  min-width: 0;
+}
+
+.topbar__logo {
+  flex: none;
+  width: var(--logo-hud);
+  height: auto;
+  margin-right: var(--space-3);
+}
+
+.topbar__room {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.topbar__code {
+  font-family: var(--font-display);
+  font-size: var(--text-title-xs);
+  font-weight: var(--weight-display-bold);
+  line-height: var(--leading-stat);
+  letter-spacing: var(--tracking-room-code);
+}
+
+.topbar__notice {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-accent);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.ping {
+  --ping-dot: 8px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+}
+
+.ping__dot {
+  width: var(--ping-dot);
+  height: var(--ping-dot);
+  flex: none;
+  border-radius: var(--radius-round);
+  background: var(--ping-color, transparent);
+}
+
+.ping__ms {
+  min-width: 6ch;
+}
+
+.ping[data-quality='good'] {
+  --ping-color: var(--color-ok);
+}
+
+.ping[data-quality='fair'] {
+  --ping-color: var(--color-accent);
+}
+
+.ping[data-quality='poor'] {
+  --ping-color: var(--color-alert);
+}
+
+.ping[data-quality='unknown'] .ping__dot {
+  box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
+}
+
+/* ---- Arena and stage ---- */
+
+.arena {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage {
+  position: relative;
+  z-index: var(--z-stage);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: max-content;
+  transform: scale(var(--stage-scale, 1));
+  transform-origin: top center;
+}
+
+.duel {
+  display: grid;
+  grid-template-columns: auto var(--vs-col) auto;
+  align-items: start;
+  column-gap: var(--space-8);
+}
+
+/* ---- Player columns ---- */
+
+.player-col {
+  /*
+   * Where the board starts inside CORE's board canvas: meter, a gap as wide as the own meter, then
+   * the danger-ring padding (render/geometry.ts). Name plates and the combo banner align to it.
+   */
+  --board-inset: calc(var(--meter-width) * 2 + var(--danger-ring-width));
+
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.player-col--opp {
+  --board-inset: calc(var(--meter-width-opp) + var(--meter-width) + var(--danger-ring-width));
+}
+
+/* Spectators: both boards use the own size and meter (render/geometry.ts arenaCellSizes). */
+.game[data-role='spectator'] .player-col--opp {
+  --board-inset: calc(var(--meter-width) * 2 + var(--danger-ring-width));
+}
+
+.nameplate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* The plate never widens the column: long names truncate (full name in title). */
+  width: 0;
+  min-width: 100%;
+  height: var(--space-8);
+  padding-inline-start: var(--board-inset);
+}
+
+.nameplate__name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-col--own .nameplate__name {
+  font-size: var(--text-title-lg);
+}
+
+.player-col--opp .nameplate__name {
+  font-size: var(--text-title-sm);
+}
+
+.nameplate .label {
+  flex: none;
+}
+
+.pips {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  gap: var(--space-1);
+}
+
+.pip {
+  width: var(--pip-size, 10px);
+  height: var(--pip-size, 10px);
+  box-shadow: inset 0 0 0 1px var(--color-text-muted);
+}
+
+.pips--opp {
+  --pip-size: 8px;
+}
+
+.pip[data-filled='true'] {
+  background: var(--color-accent);
+  box-shadow: none;
+}
+
+.player-col__body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.board-slot {
+  position: relative;
+  flex: none;
+  transition: opacity var(--dur-result-delay) var(--ease-standard);
+}
+
+.board-slot[data-dimmed='true'] {
+  opacity: 0.5;
+}
+
+/* Board lift: a static box behind the board's own rectangle (not the meter or the ring padding). */
+.board-slot::before {
+  content: '';
+  position: absolute;
+  inset: var(--danger-ring-width) var(--danger-ring-width) var(--danger-ring-width)
+    var(--board-inset);
+  box-shadow: var(--shadow-board);
+  pointer-events: none;
+}
+
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: var(--side-own);
+}
+
+.player-col--opp .side-col {
+  width: var(--side-opp);
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat__value {
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-stat);
+}
+
+.player-col--own .stat__value {
+  font-size: var(--text-title-lg);
+}
+
+.player-col--opp .stat__value {
+  font-size: var(--text-title-sm);
+}
+
+/* Compact side columns below 16 px cells, so NEXT ×5 plus three stats fit the board height. */
+.stage[data-compact='true'] .player-col--own .stat__value {
+  font-size: var(--text-title-sm);
+}
+
+.stage[data-compact='true'] .stats {
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* ---- VS column ---- */
+
+.vs-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.round-tag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: var(--space-8);
+}
+
+.round-tag__replay {
+  color: var(--color-accent);
+}
+
+.vs {
+  margin-top: var(--space-8);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-display-md);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+}
+
+.speed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.speed__value {
+  min-width: 2ch;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-display);
+}
+
+.speed__num {
+  display: inline-block;
+  animation: rise-in var(--dur-speed-swap) var(--ease-out-expo);
+}
+
+.clock {
+  min-width: 5.5ch;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  background: var(--color-clock-bg);
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-display);
+  letter-spacing: var(--tracking-clock);
+}
+
+/* ---- Legend ---- */
+
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+  white-space: nowrap;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legend kbd {
+  min-width: 2.4ch;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--surface-chip);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+  text-align: center;
+}
+
+/* ---- Fx canvas (CORE draws projectiles and bursts here) ---- */
+
+.fx-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-projectiles);
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---- Combo banner (DESIGN.md "Combo banner"; REQ-052) ---- */
+
+.combo-banner {
+  /* DESIGN.md: hangs 14 px past the board's left edge at 25% of its height; padding 6 16 6 12. */
+  --banner-hang: 14px;
+  --banner-pad-block: 6px;
+  /* Room for the hard on-air shadow inside the wipe's clip. */
+  --banner-clip-bleed: var(--space-2);
+
+  position: absolute;
+  top: 25%;
+  left: calc(var(--board-inset) - var(--banner-hang));
+  z-index: var(--z-board-fx);
+  display: flex;
+  flex-direction: column;
+  padding: var(--banner-pad-block) var(--space-4) var(--banner-pad-block) var(--space-3);
+  background: var(--color-accent);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-onair);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: skewX(var(--skew-onair));
+}
+
+.combo-banner[data-phase='hidden'] {
+  visibility: hidden;
+}
+
+.combo-banner[data-phase='in'] {
+  animation: banner-in var(--dur-banner-in) var(--ease-out-expo) both;
+}
+
+.combo-banner[data-phase='out'] {
+  animation: banner-out var(--dur-banner-out) var(--ease-out-quart) both;
+}
+
+.combo-banner__title {
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  text-transform: uppercase;
+}
+
+.combo-banner--opp {
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+}
+
+.combo-banner--opp .combo-banner__title {
+  font-size: var(--text-title-sm);
+}
+
+.combo-banner__count {
+  display: inline-block;
+}
+
+.combo-banner__count[data-swap='a'] {
+  animation: swap-a var(--dur-swap) var(--ease-out-expo);
+}
+
+.combo-banner__count[data-swap='b'] {
+  animation: swap-b var(--dur-swap) var(--ease-out-expo);
+}
+
+.combo-banner__sub {
+  color: var(--color-ink-soft);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.combo-banner__sub:empty {
+  display: none;
+}
+
+@keyframes banner-in {
+  from {
+    clip-path: inset(
+      calc(var(--banner-clip-bleed) * -1) 100% calc(var(--banner-clip-bleed) * -1)
+        calc(var(--banner-clip-bleed) * -1)
+    );
+    translate: calc(var(--banner-slide) * -1) 0;
+  }
+
+  to {
+    clip-path: inset(calc(var(--banner-clip-bleed) * -1));
+    translate: 0 0;
+  }
+}
+
+@keyframes banner-out {
+  from {
+    clip-path: inset(calc(var(--banner-clip-bleed) * -1));
+  }
+
+  to {
+    clip-path: inset(
+      calc(var(--banner-clip-bleed) * -1) calc(var(--banner-clip-bleed) * -1)
+        calc(var(--banner-clip-bleed) * -1) 100%
+    );
+  }
+}
+
+/* Two identical sets so flipping data-swap restarts the animation. */
+@keyframes swap-a {
+  from {
+    opacity: 0;
+    translate: 0 40%;
+  }
+}
+
+@keyframes swap-b {
+  from {
+    opacity: 0;
+    translate: 0 40%;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 40%;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar__logo {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo-banner[data-phase='in'] {
+    animation: fade-in var(--dur-reduced) var(--ease-standard) both;
+  }
+
+  .combo-banner[data-phase='out'] {
+    animation: fade-out var(--dur-reduced) var(--ease-standard) both;
+  }
+
+  .combo-banner__count[data-swap],
+  .speed__num {
+    animation: none;
+  }
+
+  .board-slot {
+    transition: none;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}

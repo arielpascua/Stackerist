@@ -1,0 +1,169 @@
+/*
+ * Arena-only overlays (DESIGN.md "Overlays", z-layer --z-overlay): they cover the arena, not the top
+ * bar, and never take pointer events from the game. W2 countdown: dim, round tag, numeral, DUEL!.
+ */
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+
+.countdown__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-dim);
+  animation: fade-in var(--dur-dim) var(--ease-standard) both;
+  transition: opacity var(--dur-dim) var(--ease-standard);
+}
+
+.countdown[data-phase='duel'] .countdown__scrim {
+  opacity: 0;
+}
+
+.countdown__content {
+  position: absolute;
+  inset: 0;
+}
+
+.countdown__round,
+.countdown__numeral,
+.countdown__duel {
+  position: absolute;
+  left: 50%;
+  translate: -50% -50%;
+  text-align: center;
+}
+
+/* The round tag sits on a chip just above the numeral, clear of the VS column underneath. */
+.countdown__round {
+  top: calc(62% - var(--text-display-xl) * 0.75);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-line);
+  background: var(--surface-card);
+  white-space: nowrap;
+}
+
+.countdown[data-phase='duel'] .countdown__round {
+  visibility: hidden;
+}
+
+.countdown__numeral {
+  top: 62%;
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-display-xl);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-countdown);
+  letter-spacing: var(--tracking-countdown);
+}
+
+.countdown__numeral[data-swap='a'] {
+  animation: numeral-in-a var(--dur-numeral-in) var(--ease-out-expo);
+}
+
+.countdown__numeral[data-swap='b'] {
+  animation: numeral-in-b var(--dur-numeral-in) var(--ease-out-expo);
+}
+
+.countdown__duel {
+  top: 50%;
+}
+
+.countdown__duel .onair-skew {
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-onair);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-display-xl);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-countdown);
+  letter-spacing: var(--tracking-countdown);
+  white-space: nowrap;
+  animation: duel-slam var(--dur-duel-slam) var(--ease-out-expo) both;
+}
+
+@keyframes numeral-in-a {
+  from {
+    opacity: 0;
+    scale: var(--numeral-scale-from);
+  }
+}
+
+@keyframes numeral-in-b {
+  from {
+    opacity: 0;
+    scale: var(--numeral-scale-from);
+  }
+}
+
+@keyframes duel-slam {
+  from {
+    opacity: 0;
+    scale: var(--duel-scale-from);
+  }
+}
+
+/* ---- Disconnect ---- */
+
+.disconnect {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--scrim-dim);
+  animation: fade-in var(--dur-dim) var(--ease-standard);
+}
+
+/* The copy sits on a card, so the dimmed boards and stats underneath never compete with it. */
+.disconnect__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: var(--measure-prose);
+  padding: var(--space-5) var(--space-7);
+  border: 1px solid var(--color-line);
+  border-top: 4px solid var(--color-alert);
+  background: var(--surface-card);
+  text-align: center;
+}
+
+.overlay-title {
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.disconnect__timer {
+  min-width: 4ch;
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-display-md);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdown__scrim,
+  .disconnect {
+    animation-duration: var(--dur-reduced);
+  }
+
+  .countdown__numeral[data-swap] {
+    animation: none;
+  }
+
+  .countdown__duel .onair-skew {
+    animation: fade-in var(--dur-reduced) var(--ease-standard) both;
+  }
+}

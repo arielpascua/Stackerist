@@ -1,0 +1,344 @@
+/*
+ * Home, lobby and the full-screen plates (DESIGN.md "Home and lobby: down to 390 px"). Text never sits
+ * on raw art: it sits on a plate (The Plate Rule). These pages may scroll vertically when the viewport
+ * is shorter than the content, never sideways.
+ */
+
+.arena-page {
+  /* DESIGN.md: logo min(620px, 92vw) on home, 240 px in the lobby. */
+  --home-logo-width: min(620px, 92vw);
+  --lobby-logo-width: 240px;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-7);
+  min-height: 100dvh;
+  padding: var(--space-10) var(--page-pad);
+  background:
+    linear-gradient(var(--scrim-home-top), var(--scrim-home-bottom)),
+    url('../../../../design/assets/backdrop.webp') center 30% / cover no-repeat,
+    var(--color-bg);
+}
+
+.home__brand {
+  width: var(--home-logo-width);
+  max-width: 100%;
+}
+
+.lobby__brand {
+  width: var(--lobby-logo-width);
+  max-width: 100%;
+}
+
+.home__logo,
+.lobby__logo {
+  width: 100%;
+  height: auto;
+}
+
+.plate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(var(--plate-width), 100%);
+  padding: var(--space-6);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-plate);
+  background: var(--surface-plate);
+}
+
+.plate--lobby {
+  width: min(var(--lobby-width), 100%);
+}
+
+.plate__title {
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  text-wrap: balance;
+}
+
+.plate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.plate__actions .btn {
+  flex: 1 1 auto;
+}
+
+.plate-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-alert);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+/* ---- Home ---- */
+
+.home-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-1) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+
+.code-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.code-row .input {
+  flex: 1 1 auto;
+}
+
+/* ---- Lobby ---- */
+
+.lobby__code-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  text-align: center;
+}
+
+.room-code {
+  /* The tracking adds space after the last letter; pull it back so the code stays centred. */
+  margin-inline-end: calc(var(--tracking-room-code) * -1);
+  font-family: var(--font-display);
+  font-size: var(--text-display-lg);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-headline);
+  letter-spacing: var(--tracking-room-code);
+  user-select: all;
+}
+
+.share-link {
+  max-width: 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-table);
+  line-height: var(--leading-small);
+  overflow-wrap: anywhere;
+}
+
+.share-link:hover {
+  color: var(--color-text);
+}
+
+.rule {
+  width: 100%;
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.series-line,
+.status-line {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+.notice {
+  color: var(--color-accent);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+.players {
+  display: flex;
+  flex-direction: column;
+}
+
+.player {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.player:first-child {
+  border-top: 1px solid var(--color-line);
+}
+
+.player__name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-title-sm);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-stat);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player__state {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+
+.player__waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  line-height: var(--leading-stat);
+}
+
+.waiting-dot {
+  /* DESIGN.md "Lobby": 6 px amber dot fading between 1 and 0.35 every 1.6 s (no token exists yet). */
+  --waiting-dot-size: 6px;
+  --waiting-pulse: 1600ms;
+
+  width: var(--waiting-dot-size);
+  height: var(--waiting-dot-size);
+  flex: none;
+  border-radius: var(--radius-round);
+  background: var(--color-accent);
+  animation: waiting-pulse calc(var(--waiting-pulse) / 2) var(--ease-in-out-sine) infinite alternate;
+}
+
+@keyframes waiting-pulse {
+  to {
+    opacity: 0.35;
+  }
+}
+
+.lobby__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lobby__leave,
+.topbar__leave {
+  position: relative;
+}
+
+/* ---- Leave confirm popover ---- */
+
+.popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: var(--z-dialog);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2 * var(--page-pad-narrow)));
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-popover);
+  white-space: normal;
+}
+
+/* In the lobby the button sits at the bottom of the plate, so the popover opens upward. */
+.lobby__leave .popover {
+  top: auto;
+  bottom: calc(100% + var(--space-2));
+}
+
+.popover__question {
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+  text-wrap: pretty;
+}
+
+.popover__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.popover__actions .btn {
+  flex: 1 1 auto;
+}
+
+/* ---- Connection banner ---- */
+
+.conn-banner {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: var(--z-banner);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--page-pad);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-panel);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+  animation: fade-in var(--dur-reduced) var(--ease-standard);
+}
+
+.conn-banner[data-state='failed'] .conn-banner__text {
+  color: var(--color-alert);
+}
+
+.conn-banner__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Short laptop viewports: tighter page padding so home and lobby fit without scrolling. */
+@media (max-height: 700px) {
+  .arena-page {
+    gap: var(--space-5);
+    padding-block: var(--space-5);
+  }
+}
+
+@media (max-width: 480px) {
+  .arena-page {
+    gap: var(--space-6);
+    padding: var(--space-8) var(--page-pad-narrow);
+  }
+
+  .room-code {
+    font-size: var(--text-display-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waiting-dot {
+    animation: none;
+  }
+}

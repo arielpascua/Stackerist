@@ -1,0 +1,262 @@
+/*
+ * The round result card (DESIGN.md "Result: round card", "Result card: report, best moment and table
+ * on one screen"). Full viewport at --z-result. Entrance: the losing board dims, the art fades in,
+ * then the card rises while fading in. Below its natural size the card scales uniformly; it never
+ * scrolls.
+ */
+
+.result {
+  /* The card starts entering 120 ms after the art (DESIGN.md motion table). */
+  --card-after-art: 120ms;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-result);
+  display: flex;
+}
+
+.result__art {
+  position: absolute;
+  inset: 0;
+  animation: fade-in var(--dur-art-in) var(--ease-standard) var(--dur-result-delay) both;
+}
+
+.result[data-art='win'] .result__art {
+  background: url('../../../../design/assets/win.webp') center / cover no-repeat var(--color-bg);
+}
+
+.result[data-art='arena'] .result__art {
+  background: url('../../../../design/assets/backdrop.webp') center 30% / cover no-repeat
+    var(--color-bg);
+}
+
+.result[data-art='arena'] .result__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--scrim-game);
+}
+
+.result__frame {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-6);
+  overflow: hidden;
+}
+
+.result-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: max-content;
+  max-width: var(--result-card-max);
+  padding: var(--space-5) var(--space-7);
+  border: 1px solid var(--color-line);
+  border-top: 4px solid var(--color-line);
+  background: var(--surface-card);
+  transform: scale(var(--result-scale, 1));
+  animation: card-in var(--dur-card-in) var(--ease-out-expo)
+    calc(var(--dur-result-delay) + var(--card-after-art)) both;
+}
+
+.result[data-art='win'] .result-card {
+  border-top-color: var(--color-accent);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 var(--card-rise);
+  }
+}
+
+.result-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.result-card__verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.label--final {
+  letter-spacing: var(--tracking-final);
+}
+
+.headline {
+  max-width: 14ch;
+  margin: var(--space-1) 0;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-display-lg);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-headline);
+  letter-spacing: var(--tracking-headline);
+  text-shadow: var(--shadow-onair);
+  text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.result[data-art='win'] .headline {
+  color: var(--color-accent);
+}
+
+.result-card__reason {
+  max-width: var(--measure-prose);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+.series-bug {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  text-align: right;
+}
+
+.series-bug__score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.series-bug__name {
+  max-width: 10ch;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-title-sm);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-stat);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.series-bug__digits {
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  white-space: nowrap;
+}
+
+.result-card__body {
+  display: grid;
+  grid-auto-columns: max-content;
+  grid-auto-flow: column;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+  border-block: 1px solid var(--color-line);
+}
+
+.report {
+  border-collapse: collapse;
+  font-size: var(--text-table);
+  line-height: var(--leading-small);
+}
+
+.report th,
+.report td {
+  padding: var(--space-1) 0;
+}
+
+.report .report__head {
+  max-width: 10ch;
+  overflow: hidden;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-body-strong);
+  letter-spacing: var(--tracking-label);
+  text-align: right;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.report .report__label {
+  padding-right: var(--space-6);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-body);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.report .report__value {
+  min-width: 4ch;
+  padding-left: var(--space-5);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-title-sm);
+  font-weight: var(--weight-display-heavy);
+  line-height: var(--leading-stat);
+  text-align: right;
+}
+
+.best-moment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.best-moment__title .onair-skew {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-onair-sm);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-display-sm);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.best-moment__caption {
+  color: var(--color-text-muted);
+  font-size: var(--text-table);
+  line-height: var(--leading-small);
+  letter-spacing: var(--tracking-caption);
+  text-align: center;
+}
+
+.result-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.result-card__status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result__art {
+    animation: fade-in var(--dur-reduced) var(--ease-standard) both;
+  }
+
+  .result-card {
+    animation: fade-in var(--dur-reduced) var(--ease-standard) both;
+  }
+}
