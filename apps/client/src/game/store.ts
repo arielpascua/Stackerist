@@ -13,6 +13,7 @@
  */
 import {
   PREVIEW_COUNT,
+  ghostPosition,
   pendingTotal,
   type Action,
   type PlayerState,
@@ -54,6 +55,7 @@ import type {
   Side,
 } from './contract.ts';
 import { registerFrameDriver, type FrameDriver } from './driver.ts';
+import { SnapshotEventFilter } from './events.ts';
 import { isDanger, sideSeats, standoffPhase } from './frame.ts';
 import { InputController } from './input.ts';
 import type { Timers } from './timers.ts';
@@ -207,6 +209,8 @@ export class CoreStore implements GameStore, FrameDriver {
   #chains: Record<Seat, Chain> = { A: NO_CHAIN, B: NO_CHAIN };
   /** Snapshot-driven effects waiting for the next frame. */
   #fxQueue: FxEvent[] = [];
+  /** Each attack/cancel event plays once, however many snapshots repeat it (REQ-087). */
+  readonly #eventFilter = new SnapshotEventFilter();
   /** True once the estimator has an anchor or a snapshot sample (the match clock is meaningful). */
   #clockKnown = false;
   #ownMemo: {
@@ -480,6 +484,7 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#nextSeq = 1;
     this.#reseedPredictor();
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
+    this.#eventFilter.reset();
     this.#setLive(false);
     this.#patch({
       countdown: { kind: 'start', goAtMs: estimator.goAtLocalMs() ?? now, tick: msg.tick },
@@ -569,7 +574,7 @@ export class CoreStore implements GameStore, FrameDriver {
         this.#fxQueue.push({ kind: 'nudge', side: this.#sideOf(seat, role), rows: inserted });
       }
     }
-    for (const event of msg.events) {
+    for (const event of this.#eventFilter.fresh(msg.events)) {
       if (event.type === 'attack') {
         const chain = chains[event.from];
         chains[event.from] = { sent: chain.sent + event.rows, cancelled: chain.cancelled };
@@ -645,7 +650,7 @@ export class CoreStore implements GameStore, FrameDriver {
       seat,
       board: state.board,
       active: state.active,
-      ghost: null, // REQ-061 (W4)
+      ghost: ghostPosition(state),
       next: state.queue.slice(0, PREVIEW_COUNT),
       pendingGarbage: pending,
       combo: state.combo,
@@ -725,6 +730,7 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#publicMemo = {};
     this.#publics = {};
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
+    this.#eventFilter.reset();
     this.#fxQueue = [];
     this.#nextSeq = 1;
     this.#clockKnown = false;

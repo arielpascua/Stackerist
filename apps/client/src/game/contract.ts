@@ -164,6 +164,10 @@ export type DrawBestMoment = (
 
 /** DESIGN.md "Music control". */
 export type MusicStatus = 'on' | 'off' | 'blocked' | 'unavailable';
+/** W4 (additive): the persisted choice, independent of whether the browser has unlocked audio. */
+export type MusicPreference = 'on' | 'off';
+/** W4 (additive): what last toggled the music. DESIGN.md: only a key toggle is announced in the live region. */
+export type MusicToggleSource = 'key' | 'button';
 export interface Music {
   /** Call from the Create / Join / Next round click (autoplay rules). */
   unlock(): void;
@@ -177,6 +181,12 @@ export interface Music {
   /** The M key and the Music button; persists MUSIC_STORAGE_KEY. */
   toggle(): void;
   subscribe(listener: () => void): () => void;
+  /** W4 (additive; CORE's implementation always provides it). The persisted on/off choice: 'on' while the
+   *  status is 'blocked', and also known when the status is 'unavailable'. aria-pressed = preference() === 'on'. */
+  preference?(): MusicPreference;
+  /** W4 (additive; always provided by CORE). What caused the latest toggle, or null before any. Read it inside
+   *  a `subscribe` listener: announce "Music on" / "Music off" only when it is 'key'. */
+  lastToggleSource?(): MusicToggleSource | null;
 }
 export interface CoreServices {
   readonly store: GameStore;

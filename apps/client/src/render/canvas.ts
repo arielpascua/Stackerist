@@ -4,7 +4,7 @@
  * context is scaled by DPR, so every op is in CSS px.
  */
 import { backingSize } from './geometry.ts';
-import type { DrawOp } from './renderList.ts';
+import type { DrawOp, FxOp, PolyOp } from './renderList.ts';
 
 /**
  * Sizes `canvas` to `cssWidth` × `cssHeight` CSS px at `dpr` and returns its context with the DPR
@@ -54,10 +54,26 @@ function hatch(ctx: CanvasRenderingContext2D, op: Extract<DrawOp, { op: 'hatch' 
   ctx.restore();
 }
 
-export function executeOps(ctx: CanvasRenderingContext2D, ops: readonly DrawOp[]): void {
+function polygon(ctx: CanvasRenderingContext2D, op: PolyOp): void {
+  const [first, ...rest] = op.points;
+  if (first === undefined) return;
+  ctx.globalAlpha = op.alpha;
+  ctx.fillStyle = op.color;
+  ctx.beginPath();
+  ctx.moveTo(first.x, first.y);
+  for (const point of rest) ctx.lineTo(point.x, point.y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+export function executeOps(ctx: CanvasRenderingContext2D, ops: readonly FxOp[]): void {
   for (const op of ops) {
     if (op.op === 'hatch') {
       hatch(ctx, op);
+      continue;
+    }
+    if (op.op === 'poly') {
+      polygon(ctx, op);
       continue;
     }
     ctx.globalAlpha = op.alpha;
