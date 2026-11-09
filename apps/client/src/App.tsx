@@ -243,6 +243,7 @@ export function App({ services, router, device }: AppProps) {
           origin={device.origin}
           copyText={device.copyText}
           onLeave={goHome}
+          music={music}
         />
       ) : (
         <Game
@@ -275,6 +276,7 @@ export function App({ services, router, device }: AppProps) {
         origin={device.origin}
         copyText={device.copyText}
         onLeave={goHome}
+        music={music}
       />
     );
   } else if (
@@ -300,6 +302,7 @@ export function App({ services, router, device }: AppProps) {
         origin={device.origin}
         copyText={device.copyText}
         onLeave={goHome}
+        music={music}
       />
     );
   } else {

@@ -7,7 +7,13 @@ import '../../../src/styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '../../../src/App.tsx';
-import type { BoardModel, ClientState, CoreServices, Music } from '../../../src/game/contract.ts';
+import type {
+  BoardModel,
+  ClientState,
+  CoreServices,
+  Music,
+  MusicStatus,
+} from '../../../src/game/contract.ts';
 import { mountArena } from '../../../src/render/arena.ts';
 import { drawBestMoment } from '../../../src/render/bestMoment.ts';
 import type { DeviceServices } from '../../../src/ui/browser.ts';
@@ -363,12 +369,19 @@ const SCENARIOS: Record<string, Scenario> = {
 };
 
 const noop = () => undefined;
+const musicParam = new URLSearchParams(window.location.search).get('m');
+const musicStatus: MusicStatus =
+  musicParam === 'off' || musicParam === 'blocked' || musicParam === 'unavailable'
+    ? musicParam
+    : 'on';
 const music: Music = {
   unlock: noop,
   start: noop,
   setLevel: noop,
   stop: noop,
-  status: () => 'off',
+  status: () => musicStatus,
+  preference: () => (musicStatus === 'off' ? 'off' : 'on'),
+  lastToggleSource: () => null,
   toggle: noop,
   subscribe: () => noop,
 };

@@ -100,6 +100,14 @@ export const COPY = {
       esc: 'Esc',
     },
   },
+  music: {
+    name: 'Music',
+    key: 'M',
+    blockedHint: 'Press M or click to start the music.',
+    unavailableHint: "Music isn't supported in this browser.",
+    announceOn: 'Music on',
+    announceOff: 'Music off',
+  },
   combo: {
     word: 'Combo',
     count: (combo: number) => `×${String(combo)}`,

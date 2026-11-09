@@ -64,6 +64,11 @@ export const TEST_IDS = {
     comboOwn: 'game-combo-own',
     comboOpp: 'game-combo-opp',
   },
+  music: {
+    button: 'music-button',
+    hint: 'music-hint',
+    live: 'music-live',
+  },
   leaveConfirm: {
     dialog: 'leave-confirm',
     keepPlaying: 'leave-confirm-keep-playing',
