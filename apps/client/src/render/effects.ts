@@ -7,13 +7,18 @@
  *   the board under it already shows the post-clear state, and nothing waits for it.
  * - Garbage nudge: the board rises `nudgePx(rows)` over `motion.nudgeOutMs`, then settles over
  *   `motion.nudgeBackMs`, both on `easing.outQuart`; reduced motion: no movement.
+ * - Danger pulse (REQ-088): while a board is in danger its frame is steady red and a ring just outside it
+ *   pulses its alpha between 1 and `danger.ringMinAlpha` on a `danger.periodMs` cycle (`easing.inOutSine`,
+ *   alternating); reduced motion uses `danger.ringMinAlphaReduced` (1: a steady frame). On exit the red
+ *   frame fades out over `motion.swapMs` and the ring stops.
  */
-import { easing, flash, motion, nudgePx } from '../../../../design/tokens/tokens.ts';
+import { danger, easing, flash, motion, nudgePx } from '../../../../design/tokens/tokens.ts';
 import { bezierEasing } from './easing.ts';
-import type { FlashBand } from './renderList.ts';
+import type { DangerLook, FlashBand } from './renderList.ts';
 
 const easeOutExpo = bezierEasing(easing.outExpo);
 const easeOutQuart = bezierEasing(easing.outQuart);
+const easeInOutSine = bezierEasing(easing.inOutSine);
 
 interface Flash {
   readonly rows: readonly number[];
@@ -43,6 +48,48 @@ export function flashAlphaAt(elapsedMs: number, reduced: boolean): number {
   return reduced
     ? flash.alphaReduced
     : flash.alpha * (1 - easeOutExpo(elapsedMs / flash.durationMs));
+}
+
+/**
+ * Ring opacity `elapsedMs` after the danger began: 1 at the start of a cycle, down to the minimum at half a
+ * cycle and back, eased with `easing.inOutSine`. With reduced motion the minimum is 1, so it never changes.
+ */
+export function dangerRingAlpha(elapsedMs: number, reducedMotion: boolean): number {
+  const minimum = reducedMotion ? danger.ringMinAlphaReduced : danger.ringMinAlpha;
+  const phase = (Math.max(0, elapsedMs) % danger.periodMs) / danger.periodMs;
+  const swing = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+  return 1 - (1 - minimum) * easeInOutSine(swing);
+}
+
+/** Red-frame opacity `elapsedMs` after a board left danger: it fades to 0 over `motion.swapMs`. */
+export function dangerFrameFadeAt(elapsedMs: number): number {
+  if (elapsedMs <= 0) return 1;
+  if (elapsedMs >= motion.swapMs) return 0;
+  return 1 - easeOutQuart(elapsedMs / motion.swapMs);
+}
+
+/** One board's danger state over time: feed it the model's `danger` flag each frame. */
+export class DangerPulse {
+  #since: number | null = null;
+  #exitedAt: number | null = null;
+
+  /** The frame and ring for `nowMs`. */
+  look(inDanger: boolean, nowMs: number, reducedMotion: boolean): DangerLook {
+    if (inDanger) {
+      this.#since ??= nowMs;
+      this.#exitedAt = null;
+      return { frameAlpha: 1, ringAlpha: dangerRingAlpha(nowMs - this.#since, reducedMotion) };
+    }
+    if (this.#since !== null) {
+      this.#since = null;
+      this.#exitedAt = nowMs;
+    }
+    const exited = this.#exitedAt;
+    if (exited === null) return { frameAlpha: 0, ringAlpha: 0 };
+    const frameAlpha = dangerFrameFadeAt(nowMs - exited);
+    if (frameAlpha === 0) this.#exitedAt = null;
+    return { frameAlpha, ringAlpha: 0 };
+  }
 }
 
 export class BoardEffects {
