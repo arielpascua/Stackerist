@@ -4,8 +4,9 @@
  *
  * Every colour and size comes from the tokens: block style (flat fill, inset top highlight, inset
  * bottom shade, `board.bevel*`), garbage hatched at 135° (`board.garbageStripe*`), grid and well,
- * the segmented meter (`meter.*`), the line-clear flash (`flash.*`) and the best-moment outlines
- * (`bestMoment.*`). There is no text op: names are never drawn on a canvas (REQ-044).
+ * the segmented meter (`meter.*`), the line-clear flash (`flash.*`), the ghost (`ghost.*`), the danger
+ * frame and ring (`danger.*`), the NEXT previews and the best-moment outlines (`bestMoment.*`). There is
+ * no text op: names are never drawn on a canvas (REQ-044).
  */
 import {
   BOARD_HEIGHT,
@@ -14,12 +15,15 @@ import {
   type ActivePiece,
   type Board,
   type CellKind,
+  type PieceKind,
 } from '@stackerist/engine';
 import type { WireBestMoment } from '@stackerist/protocol';
 import {
   bestMoment as bestMomentTokens,
   board as boardTokens,
+  danger,
   flash,
+  ghost,
   meter,
   pieceColor,
 } from '../../../../design/tokens/tokens.ts';
@@ -27,6 +31,7 @@ import {
   cellRect,
   meterSegments,
   pitchRect,
+  previewSlotRect,
   rowBand,
   type BoardGeometry,
   type Rect,
@@ -43,16 +48,43 @@ export type DrawOp =
       readonly stripeWidth: number;
     };
 
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** A filled quadrilateral (a skewed or rotated square on the fx canvas); corners in drawing order. */
+export interface PolyOp {
+  readonly op: 'poly';
+  readonly points: readonly Point[];
+  readonly color: string;
+  readonly alpha: number;
+}
+
+/** What the fx canvas draws: the board ops plus polygons. */
+export type FxOp = DrawOp | PolyOp;
+
 /** What a board canvas shows (a `BoardModel` satisfies it). */
 export interface BoardDrawModel {
   readonly board: Board;
   readonly active: ActivePiece | null;
   readonly pendingGarbage: number;
+  /** Where a hard drop would land the falling piece: own board only (REQ-061). */
+  readonly ghost?: ActivePiece | null;
+}
+
+/** The danger frame and ring for one frame of the pulse (REQ-088); see `DangerPulse`. */
+export interface DangerLook {
+  /** Opacity of the red frame over the normal one: 1 in danger, fading to 0 on exit. */
+  readonly frameAlpha: number;
+  /** Opacity of the ring just outside the frame (0 = no ring). */
+  readonly ringAlpha: number;
 }
 
 export interface BoardDrawOptions {
-  /** The frame colour: `board.frameColor`, or the danger colour (REQ-088, W4). */
+  /** The normal frame colour: `board.frameColor`. */
   readonly frameColor: string;
+  readonly danger?: DangerLook;
 }
 
 function rect(r: Rect, color: string, alpha = 1): DrawOp {
@@ -157,15 +189,99 @@ export function meterOps(g: BoardGeometry, pendingRows: number): DrawOp[] {
 }
 
 /** The board frame: four bands of `board.frameWidthPx` around the inner area. */
-export function frameOps(g: BoardGeometry, color: string): DrawOp[] {
+export function frameOps(g: BoardGeometry, color: string, alpha = 1): DrawOp[] {
   const width = boardTokens.frameWidthPx;
   const { x, y, w, h } = g.outer;
   return [
-    rect({ x, y, w, h: width }, color),
-    rect({ x, y: y + h - width, w, h: width }, color),
-    rect({ x, y: y + width, w: width, h: h - 2 * width }, color),
-    rect({ x: x + w - width, y: y + width, w: width, h: h - 2 * width }, color),
+    rect({ x, y, w, h: width }, color, alpha),
+    rect({ x, y: y + h - width, w, h: width }, color, alpha),
+    rect({ x, y: y + width, w: width, h: h - 2 * width }, color, alpha),
+    rect({ x: x + w - width, y: y + width, w: width, h: h - 2 * width }, color, alpha),
   ];
+}
+
+/**
+ * A `width`-px outline drawn inside `area` as four bands that do not overlap, so a translucent outline
+ * has no darker corners.
+ */
+export function outlineOps(area: Rect, width: number, color: string, alpha = 1): DrawOp[] {
+  const edge = Math.max(0, Math.min(width, area.h / 2));
+  const side = Math.max(0, Math.min(width, area.w / 2));
+  return [
+    rect({ x: area.x, y: area.y, w: area.w, h: edge }, color, alpha),
+    rect({ x: area.x, y: area.y + area.h - edge, w: area.w, h: edge }, color, alpha),
+    rect({ x: area.x, y: area.y + edge, w: side, h: area.h - 2 * edge }, color, alpha),
+    rect(
+      { x: area.x + area.w - side, y: area.y + edge, w: side, h: area.h - 2 * edge },
+      color,
+      alpha,
+    ),
+  ];
+}
+
+/**
+ * The danger frame and ring (REQ-088): the red frame over the normal one at `frameAlpha`, and a
+ * `danger.ringWidthPx` ring just outside the frame (in the canvas padding, so nothing shifts) at `ringAlpha`.
+ */
+export function dangerOps(g: BoardGeometry, look: DangerLook): DrawOp[] {
+  const ops: DrawOp[] = [];
+  if (look.frameAlpha > 0) ops.push(...frameOps(g, danger.color, look.frameAlpha));
+  if (look.ringAlpha > 0) {
+    const ring = danger.ringWidthPx;
+    const { x, y, w, h } = g.outer;
+    ops.push(
+      ...outlineOps(
+        { x: x - ring, y: y - ring, w: w + 2 * ring, h: h + 2 * ring },
+        ring,
+        danger.color,
+        look.ringAlpha,
+      ),
+    );
+  }
+  return ops;
+}
+
+/**
+ * The ghost (REQ-061): each cell of the landing piece as a `ghost.lineWidthPx` inset outline in the piece
+ * colour at `ghost.alpha`, no fill. Cells above the board are not drawn.
+ */
+export function ghostOps(g: BoardGeometry, piece: ActivePiece | null): DrawOp[] {
+  if (piece === null) return [];
+  return pieceCells(piece)
+    .filter(({ x, y }) => x >= 0 && x < BOARD_WIDTH && y >= 0 && y < BOARD_HEIGHT)
+    .flatMap(({ x, y }) =>
+      outlineOps(cellRect(g, x, y), ghost.lineWidthPx, pieceColor[piece.kind], ghost.alpha),
+    );
+}
+
+/**
+ * A NEXT column (REQ-060): one mini piece per slot, in block style, rotation 0, centred in its 4 x 2 cell
+ * slot. The first kind is the next piece. Transparent background.
+ */
+export function nextPreviewOps(cell: number, kinds: readonly PieceKind[]): DrawOp[] {
+  const line = boardTokens.gridLineWidthPx;
+  return kinds.flatMap((kind, index) => {
+    const slot = previewSlotRect(cell, index);
+    const cells = pieceCells({ kind, rotation: 0, x: 0, y: 0 });
+    const minX = Math.min(...cells.map((c) => c.x));
+    const maxX = Math.max(...cells.map((c) => c.x));
+    const minY = Math.min(...cells.map((c) => c.y));
+    const maxY = Math.max(...cells.map((c) => c.y));
+    const left = slot.x + ((4 - (maxX - minX + 1)) * cell) / 2;
+    const top = slot.y + ((2 - (maxY - minY + 1)) * cell) / 2;
+    return cells.flatMap((c) =>
+      blockOps(
+        {
+          x: left + (c.x - minX) * cell,
+          y: top + (c.y - minY) * cell,
+          w: cell - line,
+          h: cell - line,
+        },
+        kind,
+        cell,
+      ),
+    );
+  });
 }
 
 /** A whole board canvas: well and grid, locked cells, the falling piece, the meter, the frame. */
@@ -177,10 +293,11 @@ export function boardOps(
   return [
     ...wellOps(g),
     ...(model === null ? [] : lockedCellOps(g, model.board)),
-    // The ghost (REQ-061) slots in here, under the falling piece (W4).
+    ...(model === null ? [] : ghostOps(g, model.ghost ?? null)),
     ...(model === null ? [] : pieceOps(g, model.active)),
     ...meterOps(g, model?.pendingGarbage ?? 0),
     ...frameOps(g, options.frameColor),
+    ...(options.danger === undefined ? [] : dangerOps(g, options.danger)),
   ];
 }
 

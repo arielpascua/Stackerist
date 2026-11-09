@@ -167,3 +167,8 @@ export function nextCanvasSize(cellNext: number, count: number): { width: number
   const slots = Math.max(1, count);
   return { width: 4 * cellNext, height: slots * 2 * cellNext + (slots - 1) * cellNext };
 }
+
+/** The 4 x 2 cell slot of preview `index` in a NEXT column: slots are one cell apart. */
+export function previewSlotRect(cellNext: number, index: number): Rect {
+  return { x: 0, y: index * 3 * cellNext, w: 4 * cellNext, h: 2 * cellNext };
+}
