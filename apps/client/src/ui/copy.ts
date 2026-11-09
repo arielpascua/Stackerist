@@ -65,6 +65,8 @@ export const COPY = {
     clockName: 'Match time',
     controls: 'Controls',
     replay: 'Replay',
+    /** "Round 2" or "Round 2 · Replay" (the standoff's round tag). */
+    roundTagReplay: (round: number) => `Round ${String(round)} · Replay`,
     leave: 'Leave',
     stopWatching: 'Stop watching',
     yourBoard: 'Your board',
@@ -115,6 +117,7 @@ export const COPY = {
       `Round ${String(round)}. ${left} versus ${right}.`,
     duel: 'DUEL!',
     duelSpoken: 'Duel!',
+    plateName: (name: string, won: number) => `${name}, ${String(won)} won`,
   },
   disconnect: {
     title: (name: string) => `${name} disconnected`,
@@ -163,9 +166,12 @@ export const COPY = {
       garbageReceived: 'Garbage received',
       garbageCancelled: 'Garbage cancelled',
       bestCombo: 'Best combo',
-      pieces: 'Pieces',
+      piecesPerSecond: 'Pieces per second',
+      actionsPerMinute: 'Actions per minute',
     },
     bestComboValue: (combo: number) => (combo > 0 ? `×${String(combo)}` : '—'),
+    /** Shown for a stat that cannot be computed (a round shorter than one second). */
+    noValue: '—',
     yourBestMoment: 'Your best moment',
     bestMomentOf: (name: string) => `${name}'s best moment`,
     bestMomentBoard: (title: string) => `Board at the moment of the ${title}`,
@@ -179,7 +185,45 @@ export const COPY = {
     opponentLeft: 'Opponent left',
     opponentReconnecting: (name: string) => `Waiting for ${name} to reconnect…`,
     spectatorWaiting: 'Waiting for the next round',
-    seriesOverNoReport: 'Series final',
+    /** The series card (REQ-084). */
+    series: {
+      final: 'Series final',
+      /** "Ariel wins the series 2–1" (the winner's rounds first). */
+      headline: (name: string, score: { readonly won: number; readonly lost: number } | null) =>
+        score === null
+          ? `${name} wins the series`
+          : `${name} wins the series ${String(score.won)}–${String(score.lost)}`,
+      youWonRounds: (won: number, lost: number) =>
+        `You won ${String(won)} ${won === 1 ? 'round' : 'rounds'} to ${String(lost)}.`,
+      theyWonRounds: (name: string, won: number, lost: number) =>
+        `${name} won ${String(won)} ${won === 1 ? 'round' : 'rounds'} to ${String(lost)}.`,
+      opponentLeftYours: (name: string) => `${name} left, so the series is yours.`,
+      opponentDisconnectedYours: (name: string) =>
+        `${name} didn't reconnect in time, so the series is yours.`,
+      youDisconnected: (winner: string) => `You didn't reconnect in time, so ${winner} won.`,
+      youLeft: (winner: string) => `You left, so ${winner} won the series.`,
+      leftSpectator: (name: string) => `${name} left the series.`,
+      chipRound: (round: number) => `R${String(round)}`,
+      chipDraw: (round: number) => `R${String(round)} · Draw, replayed`,
+      chipName: (round: number, winner: string) => `Round ${String(round)}, won by ${winner}`,
+      chipDrawName: (round: number) => `Round ${String(round)}, a draw that was replayed`,
+    },
+    chart: {
+      heading: 'Stack height',
+      you: 'You',
+      danger: 'Danger',
+      empty: 'Round too short to chart',
+      title: (round: number) => `Stack height over round ${String(round)}`,
+      peaked: (name: string, rows: number, at: string, toppedOut: boolean) =>
+        `${name} peaked at ${String(rows)} ${rows === 1 ? 'row' : 'rows'} at ${at}${toppedOut ? ' and topped out' : ''}.`,
+      noData: (name: string) => `${name} has no height samples.`,
+      tableCaption: 'Stack height summary',
+      colPlayer: 'Player',
+      colPeak: 'Peak height',
+      colAt: 'At',
+      colAverage: 'Average height',
+      rows: (n: number) => `${String(n)} ${n === 1 ? 'row' : 'rows'}`,
+    },
   },
   errors: {
     nameInvalid: (max: number) => `Enter your name (1–${String(max)} characters) to play.`,

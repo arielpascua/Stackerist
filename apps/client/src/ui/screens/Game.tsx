@@ -318,9 +318,12 @@ export function Game(props: GameProps) {
           liveRef={countdownLive}
           roundLabel={
             room.series.replay
-              ? `${COPY.game.roundTag(room.series.round)} · ${COPY.game.replay}`
+              ? COPY.game.roundTagReplay(room.series.round)
               : COPY.game.roundTag(room.series.round)
           }
+          left={{ name: names[leftSeat], won: score[leftSeat] }}
+          right={{ name: names[rightSeat], won: score[rightSeat] }}
+          kind={resuming ? 'resume' : 'start'}
         />
         {lostConnection ? (
           <DisconnectOverlay opponent={null} spectator={spectator} graceSeconds={GRACE_MS / 1000} />

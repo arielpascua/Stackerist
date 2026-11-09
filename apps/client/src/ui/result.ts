@@ -3,6 +3,7 @@
  * (REQ-050, REQ-051; DESIGN.md "Result: round card"). Pure, so every reason line, headline and button
  * state is unit-tested without a DOM.
  */
+import { TICK_RATE } from '@stackerist/engine';
 import type {
   GameOverMessage,
   PlayerStats,
@@ -12,6 +13,7 @@ import type {
   WireBestMoment,
 } from '@stackerist/protocol';
 import type { Role } from '../game/contract.ts';
+import { buildChart, type ChartModel } from './chart.ts';
 import { COPY } from './copy.ts';
 import { formatTicks } from './format.ts';
 
@@ -35,7 +37,20 @@ export interface BestMomentView {
   readonly moment: WireBestMoment;
 }
 
+/** One played round on the series card, including a replayed draw (REQ-084). */
+export interface RoundChip {
+  /** "R1", or the whole "R2 · Draw, replayed" for a draw. */
+  readonly label: string;
+  /** The winner's name; empty for a draw. */
+  readonly winner: string;
+  readonly draw: boolean;
+  /** The chip's accessible name. */
+  readonly name: string;
+}
+
 export interface ResultView {
+  /** The round card, or the series winner screen (REQ-084). */
+  readonly kind: 'round' | 'series';
   readonly outcome: Outcome;
   /** Win art for a win (and for spectators of a decided round); the scrimmed arena otherwise. */
   readonly art: 'win' | 'arena';
@@ -53,6 +68,10 @@ export interface ResultView {
   readonly columns: readonly [string, string];
   readonly rows: readonly StatRow[];
   readonly bestMoments: readonly BestMomentView[];
+  /** Series card only: one chip per played round, in order. */
+  readonly chips: readonly RoundChip[];
+  /** The stack-height chart; null when there is no round report to draw. */
+  readonly chart: ChartModel | null;
   /** null for spectators (Back to home only). */
   readonly primary: { readonly label: string; readonly disabled: boolean } | null;
   readonly status: string;
@@ -144,6 +163,23 @@ export function bestMomentCaption(moment: WireBestMoment, roundTick: number): st
   return parts.join(' · ');
 }
 
+/** Under one second of play a per-second rate means nothing: show a dash (and never divide by 0). */
+function playedSeconds(durationTicks: number): number | null {
+  return durationTicks >= TICK_RATE ? durationTicks / TICK_RATE : null;
+}
+
+/** PPS = piecesPlaced ÷ (durationTicks ÷ 60), two decimals (REQ-091). */
+export function piecesPerSecond(piecesPlaced: number, durationTicks: number): string {
+  const seconds = playedSeconds(durationTicks);
+  return seconds === null ? COPY.result.noValue : (piecesPlaced / seconds).toFixed(2);
+}
+
+/** APM = actions × 60 ÷ (durationTicks ÷ 60), an integer (REQ-091). */
+export function actionsPerMinute(actions: number, durationTicks: number): string {
+  const seconds = playedSeconds(durationTicks);
+  return seconds === null ? COPY.result.noValue : String(Math.round((actions * 60) / seconds));
+}
+
 function statValues(
   stats: GameOverMessage['stats'],
   report: GameOverMessage['report'],
@@ -151,14 +187,16 @@ function statValues(
 ): readonly string[] {
   const s: PlayerStats | undefined = stats[seat];
   const r = report[seat];
-  const num = (n: number | undefined) => (n === undefined ? '—' : String(n));
+  const none = COPY.result.noValue;
+  const num = (n: number | undefined) => (n === undefined ? none : String(n));
   return [
     num(s?.linesCleared),
     num(s?.garbageSent),
     num(r?.garbageReceived),
     num(s?.garbageCancelled),
-    s === undefined ? '—' : COPY.result.bestComboValue(s.bestCombo),
-    num(s?.piecesPlaced),
+    s === undefined ? none : COPY.result.bestComboValue(s.bestCombo),
+    r === undefined ? none : piecesPerSecond(r.piecesPlaced, r.durationTicks),
+    r === undefined ? none : actionsPerMinute(r.actions, r.durationTicks),
   ];
 }
 
@@ -168,7 +206,8 @@ const ROW_LABELS = [
   COPY.result.rows.garbageReceived,
   COPY.result.rows.garbageCancelled,
   COPY.result.rows.bestCombo,
-  COPY.result.rows.pieces,
+  COPY.result.rows.piecesPerSecond,
+  COPY.result.rows.actionsPerMinute,
 ] as const;
 
 type StatusInput = Pick<
@@ -191,14 +230,137 @@ function statusLine(input: StatusInput, seriesOver: boolean, opponent: Seat | nu
   return '';
 }
 
+/** Next round / New series: pressing it, or an opponent who left, disables it (REQ-059). */
+function primaryButton(
+  input: StatusInput,
+  seriesOver: boolean,
+): { readonly label: string; readonly disabled: boolean } | null {
+  if (input.role === 'spectator') return null;
+  return {
+    label: seriesOver ? COPY.result.newSeries : COPY.result.nextRound,
+    disabled: input.ready[input.role] || input.opponentSeated === false,
+  };
+}
+
+/** Which seats topped out this round: the loser of a top-out, both on a draw, nobody on a forfeit. */
+function toppedOutSeats(result: GameOverMessage): { readonly A: boolean; readonly B: boolean } {
+  if (result.reason !== 'TOP_OUT' && result.reason !== 'DRAW') return { A: false, B: false };
+  if (result.winner === null) return { A: true, B: true };
+  return { A: result.winner === 'B', B: result.winner === 'A' };
+}
+
+/** The stack-height chart for a round report (REQ-091). Players: you (amber) then the opponent. */
+function chartFor(
+  result: GameOverMessage,
+  role: Role,
+  names: SeatNames,
+  order: readonly [Seat, Seat],
+): ChartModel {
+  const topped = toppedOutSeats(result);
+  const durationTicks = Math.max(
+    result.report.A?.durationTicks ?? 0,
+    result.report.B?.durationTicks ?? 0,
+  );
+  const nameOf = (seat: Seat, first: boolean): string =>
+    role === 'spectator' || !first ? names[seat] : COPY.result.chart.you;
+  return buildChart({
+    round: result.round,
+    durationTicks,
+    series: order.map((seat, index) => ({
+      key: index === 0 ? ('you' as const) : ('opp' as const),
+      name: nameOf(seat, index === 0),
+      samples: result.report[seat]?.heightSamples ?? [],
+      toppedOut: topped[seat],
+    })),
+  });
+}
+
+function chipsOf(series: SeriesView, names: SeatNames): readonly RoundChip[] {
+  return series.rounds.map((round): RoundChip => {
+    if (round.winner === null) {
+      return {
+        label: COPY.result.series.chipDraw(round.round),
+        winner: '',
+        draw: true,
+        name: COPY.result.series.chipDrawName(round.round),
+      };
+    }
+    return {
+      label: COPY.result.series.chipRound(round.round),
+      winner: names[round.winner],
+      draw: false,
+      name: COPY.result.series.chipName(round.round, names[round.winner]),
+    };
+  });
+}
+
+function seriesReason(series: SeriesView, winner: Seat, role: Role, names: SeatNames): string {
+  const loser = otherSeat(winner);
+  const won = series.score[winner];
+  const lost = series.score[loser];
+  const text = COPY.result.series;
+  switch (series.endReason) {
+    case 'OPPONENT_LEFT':
+      if (role === winner) return text.opponentLeftYours(names[loser]);
+      return role === loser ? text.youLeft(names[winner]) : text.leftSpectator(names[loser]);
+    case 'OPPONENT_DISCONNECTED':
+      if (role === winner) return text.opponentDisconnectedYours(names[loser]);
+      return role === loser
+        ? text.youDisconnected(names[winner])
+        : COPY.result.didntReconnect(names[loser]);
+    case 'TWO_WINS':
+    case null:
+      return role === winner
+        ? text.youWonRounds(won, lost)
+        : text.theyWonRounds(names[winner], won, lost);
+  }
+}
+
+interface SeriesVerdict {
+  readonly outcome: Outcome;
+  readonly art: 'win' | 'arena';
+  readonly finalLabel: string;
+  readonly headline: string;
+  readonly reason: string;
+  readonly chips: readonly RoundChip[];
+}
+
+/** The series winner screen's verdict (REQ-084): headline, reason and the round chips. */
+function seriesVerdict(
+  series: SeriesView,
+  role: Role,
+  names: SeatNames,
+  winner: Seat,
+): SeriesVerdict {
+  const outcome: Outcome = role === 'spectator' ? 'watch' : role === winner ? 'win' : 'lose';
+  // A forfeit has no meaningful round score to announce; the series bug still shows it.
+  const score =
+    series.endReason === 'TWO_WINS'
+      ? { won: series.score[winner], lost: series.score[otherSeat(winner)] }
+      : null;
+  return {
+    outcome,
+    art: outcome === 'lose' ? 'arena' : 'win',
+    finalLabel: COPY.result.series.final,
+    headline: COPY.result.series.headline(names[winner], score),
+    reason: seriesReason(series, winner, role, names),
+    chips: chipsOf(series, names),
+  };
+}
+
+function seriesBug(series: SeriesView, names: SeatNames): ResultView['series'] {
+  return {
+    A: { name: names.A, score: series.score.A },
+    B: { name: names.B, score: series.score.B },
+  };
+}
+
 export function deriveResult(input: ResultInput): ResultView {
   const { result, role, names } = input;
   const series = input.series ?? result.series;
   const seriesOver = series.over || input.status === 'seriesOver';
-  const outcome = outcomeOf(result, role);
-  const finalLabel = COPY.result.final(result.round, result.replay);
-  const headline = headlineOf(outcome, result, names);
-  const reason = reasonLine(input);
+  const verdict =
+    seriesOver && series.winner !== null ? seriesVerdict(series, role, names, series.winner) : null;
   const opponent = role === 'spectator' ? null : otherSeat(role);
   const order: readonly [Seat, Seat] = role === 'spectator' ? ['A', 'B'] : [role, otherSeat(role)];
   const columns: readonly [string, string] =
@@ -207,7 +369,7 @@ export function deriveResult(input: ResultInput): ResultView {
   const right = statValues(result.stats, result.report, order[1]);
   const rows = ROW_LABELS.map((label, i): StatRow => ({
     label,
-    values: [left[i] ?? '—', right[i] ?? '—'],
+    values: [left[i] ?? COPY.result.noValue, right[i] ?? COPY.result.noValue],
   }));
 
   const momentSeats: readonly Seat[] = role === 'spectator' ? ['A', 'B'] : [role];
@@ -226,38 +388,35 @@ export function deriveResult(input: ResultInput): ResultView {
     ];
   });
 
-  const primary =
-    role === 'spectator'
-      ? null
-      : {
-          label: seriesOver ? COPY.result.newSeries : COPY.result.nextRound,
-          disabled: input.ready[role] || (seriesOver && input.opponentSeated === false),
-        };
-
-  const seriesView = {
-    A: { name: names.A, score: series.score.A },
-    B: { name: names.B, score: series.score.B },
-  };
+  const outcome = verdict?.outcome ?? outcomeOf(result, role);
+  const headline = verdict?.headline ?? headlineOf(outcome, result, names);
+  const reason = verdict?.reason ?? reasonLine(input);
+  const finalLabel = verdict?.finalLabel ?? COPY.result.final(result.round, result.replay);
   const summary = COPY.result.summary([
-    COPY.result.finalSpoken(result.round, result.replay),
+    verdict === null ? COPY.result.finalSpoken(result.round, result.replay) : finalLabel,
     headline,
     reason,
     COPY.result.seriesScoreName(names.A, series.score.A, series.score.B, names.B),
   ]);
 
   return {
+    kind: verdict === null ? 'round' : 'series',
     outcome,
-    art: outcome === 'win' || (outcome === 'watch' && result.winner !== null) ? 'win' : 'arena',
-    winner: result.winner,
+    art:
+      verdict?.art ??
+      (outcome === 'win' || (outcome === 'watch' && result.winner !== null) ? 'win' : 'arena'),
+    winner: verdict === null ? result.winner : series.winner,
     finalLabel,
     headline,
     reason,
-    series: seriesView,
+    series: seriesBug(series, names),
     seriesOver,
     columns,
     rows,
     bestMoments,
-    primary,
+    chips: verdict?.chips ?? [],
+    chart: chartFor(result, role, names, order),
+    primary: primaryButton(input, seriesOver),
     status: statusLine(input, seriesOver, opponent),
     summary,
   };
@@ -273,63 +432,36 @@ export interface SeriesEndInput {
 }
 
 /**
- * A series that ended with no round report to show (a forfeit between rounds): the same card with
- * only the verdict, the series bug and the actions. W4 replaces this with the full series card.
+ * A series that ended with no round report to show (a forfeit mid-round whose `gameOver` never
+ * arrived): the series winner screen with only the verdict, the score, the round chips and the
+ * actions. The body (table, chart, best moment) is hidden (REQ-084).
  */
 export function deriveSeriesEnd(input: SeriesEndInput): ResultView {
   const { series, role, names } = input;
-  const winner = series.winner;
-  let outcome: Outcome = 'watch';
-  if (role !== 'spectator') outcome = winner === null ? 'draw' : winner === role ? 'win' : 'lose';
-  let headline: string = COPY.result.draw;
-  if (outcome === 'win') headline = COPY.result.youWin;
-  else if (outcome === 'lose') headline = COPY.result.youLose;
-  else if (winner !== null) headline = COPY.result.wins(names[winner]);
-  const loser = winner === null ? null : otherSeat(winner);
-  let reason = '';
-  if (loser !== null && series.endReason === 'OPPONENT_LEFT')
-    reason = COPY.result.left(names[loser]);
-  if (loser !== null && series.endReason === 'OPPONENT_DISCONNECTED') {
-    reason = COPY.result.didntReconnect(names[loser]);
-  }
+  const verdict = seriesVerdict(series, role, names, series.winner ?? 'A');
   const opponent = role === 'spectator' ? null : otherSeat(role);
-  const statusInput = {
-    role,
-    names,
-    ready: input.ready,
-    opponentSeated: input.opponentSeated,
-    opponentConnected: input.opponentConnected,
-  };
   return {
-    outcome,
-    art: outcome === 'win' || (outcome === 'watch' && winner !== null) ? 'win' : 'arena',
-    winner,
-    finalLabel: COPY.result.seriesOverNoReport,
-    headline,
-    reason,
-    series: {
-      A: { name: names.A, score: series.score.A },
-      B: { name: names.B, score: series.score.B },
-    },
+    kind: 'series',
+    outcome: verdict.outcome,
+    art: verdict.art,
+    winner: series.winner,
+    finalLabel: verdict.finalLabel,
+    headline: verdict.headline,
+    reason: verdict.reason,
+    series: seriesBug(series, names),
     seriesOver: true,
     columns: [COPY.result.you, ''],
     rows: [],
     bestMoments: [],
-    primary:
-      role === 'spectator'
-        ? null
-        : {
-            label: COPY.result.newSeries,
-            disabled: input.ready[role] || input.opponentSeated === false,
-          },
-    status: statusLine(statusInput, true, opponent),
-    summary: COPY.result.summary(
-      [
-        COPY.result.seriesOverNoReport,
-        headline,
-        reason,
-        COPY.result.seriesScoreName(names.A, series.score.A, series.score.B, names.B),
-      ].filter((part) => part !== ''),
-    ),
+    chips: verdict.chips,
+    chart: null,
+    primary: primaryButton(input, true),
+    status: statusLine(input, true, opponent),
+    summary: COPY.result.summary([
+      verdict.finalLabel,
+      verdict.headline,
+      verdict.reason,
+      COPY.result.seriesScoreName(names.A, series.score.A, series.score.B, names.B),
+    ]),
   };
 }

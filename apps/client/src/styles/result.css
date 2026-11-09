@@ -265,6 +265,189 @@
   line-height: var(--leading-small);
 }
 
+/* ---- Series winner screen (REQ-084): same skeleton, a smaller headline, the final score and chips ---- */
+
+.headline--series {
+  max-width: 18ch;
+  font-size: var(--text-display-md);
+  line-height: var(--leading-display);
+  letter-spacing: 0;
+}
+
+.series-bug {
+  gap: var(--space-3);
+}
+
+.series-bug__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+/* The final score reads as the big number on the series card. */
+.series-bug[data-kind='series'] .series-bug__digits {
+  font-size: var(--text-display-md);
+}
+
+.round-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  max-width: 28rem;
+}
+
+.round-chip {
+  border: 1px solid var(--color-line);
+  background: var(--color-bg);
+}
+
+.round-chip__text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+}
+
+.round-chip__winner {
+  max-width: 10ch;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-title-xs);
+  font-weight: var(--weight-display-bold);
+  line-height: var(--leading-stat);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A replayed draw has no winner: the whole chip ("R2 · Draw, replayed") reads in muted tan. */
+.round-chip[data-draw='true'] .label {
+  letter-spacing: var(--tracking-caption);
+}
+
+/* ---- Stack-height chart (REQ-091): the centre panel ---- */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--chart-width);
+  min-width: 0;
+  margin: 0;
+}
+
+.chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+}
+
+.chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.chart__legend-name {
+  max-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A 16 × 2 px swatch; the danger swatch is dashed like its rule. */
+.chart__swatch {
+  flex: none;
+  width: var(--space-4);
+  height: 0;
+  border-top: var(--chart-line-width) solid var(--chart-you);
+}
+
+.chart__swatch--opp {
+  border-top-color: var(--chart-opp);
+}
+
+.chart__swatch--danger {
+  border-top: 1px dashed var(--chart-danger);
+}
+
+.chart__svg {
+  display: block;
+  width: var(--chart-width);
+  height: var(--chart-height);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.chart__grid line {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart__baseline {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+
+.chart__danger {
+  stroke: var(--chart-danger);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.chart__axis text,
+.chart__empty {
+  fill: var(--chart-label);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  font-weight: var(--weight-body-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart__axis .chart__axis-danger {
+  fill: var(--chart-danger);
+}
+
+.chart__empty {
+  font-size: var(--text-table);
+  font-weight: var(--weight-body);
+}
+
+.chart__line polyline {
+  stroke: var(--chart-opp);
+  stroke-width: var(--chart-line-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__line rect {
+  fill: var(--chart-opp);
+}
+
+.chart__line--you polyline {
+  stroke: var(--chart-you);
+}
+
+.chart__line--you rect {
+  fill: var(--chart-you);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .result__art {
     animation: fade-in var(--dur-reduced) var(--ease-standard) both;
