@@ -255,7 +255,15 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       await expect(b.page.getByTestId(TEST_IDS.result.reason)).toHaveText(
         COPY.result.didntReconnect(a.name),
       );
-      await expect(b.page.getByTestId(TEST_IDS.disconnect.overlay)).toBeHidden();
+      // DEFECT (QA pass 2, owner apps/client/src/game/store.ts `gameOver` case + ui DisconnectOverlay):
+      // the store keeps `paused` after `gameOver`, so the "Alice disconnected ... 0 s" overlay stays in the
+      // DOM (and its live region keeps announcing) under the result card. Soft, so the rest still runs.
+      await expect
+        .soft(
+          b.page.getByTestId(TEST_IDS.disconnect.overlay),
+          'the disconnect overlay is gone once the forfeit result is shown',
+        )
+        .toBeHidden();
       await expect.poll(() => framesB.gameOvers().length, { timeout: 5_000 }).toBe(1);
       const over = framesB.gameOvers()[0];
       expect(over?.reason).toBe('OPPONENT_DISCONNECTED');
