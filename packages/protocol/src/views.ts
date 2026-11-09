@@ -8,6 +8,7 @@
  */
 import {
   PREVIEW_COUNT,
+  pendingTotal,
   type ActivePiece,
   type BestMoment,
   type GarbageAttack,
@@ -46,22 +47,13 @@ function toLiveStats(state: PlayerState): LiveStats {
   };
 }
 
-/** Total pending garbage in rows. */
-function pendingRows(pending: readonly GarbageAttack[]): number {
-  let rows = 0;
-  for (const attack of pending) {
-    rows += attack.rows;
-  }
-  return rows;
-}
-
 /** Opponents and spectators: next = the first PUBLIC_PREVIEW_COUNT (1) pieces; pending = total rows. */
 export function toPublicView(state: PlayerState): PublicView {
   return {
     board: [...state.board],
     active: copyActive(state.active),
     next: state.queue.slice(0, PUBLIC_PREVIEW_COUNT),
-    pendingGarbage: pendingRows(state.pendingGarbage),
+    pendingGarbage: pendingTotal(state.pendingGarbage),
     combo: state.combo,
     stats: toLiveStats(state),
     toppedOut: state.toppedOut,
