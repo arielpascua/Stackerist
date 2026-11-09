@@ -7,13 +7,26 @@ import '../../../src/styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '../../../src/App.tsx';
-import type { BoardModel, ClientState, CoreServices, Music } from '../../../src/game/contract.ts';
+import type {
+  BoardModel,
+  ClientState,
+  CoreServices,
+  Music,
+  MusicStatus,
+} from '../../../src/game/contract.ts';
 import { mountArena } from '../../../src/render/arena.ts';
 import { drawBestMoment } from '../../../src/render/bestMoment.ts';
 import type { DeviceServices } from '../../../src/ui/browser.ts';
 import { KeyboardProof } from '../../../src/ui/device.ts';
 import { createMemoryRouter } from '../../../src/ui/router.ts';
-import { makeClientState, makeGameOver, makeRoom, makeSeries, ZERO_STATS } from '../fixtures.ts';
+import {
+  makeClientState,
+  makeGameOver,
+  makeReport,
+  makeRoom,
+  makeSeries,
+  ZERO_STATS,
+} from '../fixtures.ts';
 import { FakeStore, type FrameScript } from './fakeStore.ts';
 
 const E = '..........';
@@ -104,8 +117,28 @@ const seatedGame = (overrides: Partial<ClientState>): ClientState =>
     ...overrides,
   });
 
+/** A believable stack-height trace: one sample per 30 ticks, climbing in waves to `peak` rows. */
+function heights(samples: number, peak: number, phase: number): number[] {
+  return Array.from({ length: samples }, (_, i) => {
+    const wave = (Math.sin(i / 14 + phase) + 1) / 2;
+    const climb = Math.min(1, i / (samples * 0.9));
+    return Math.max(0, Math.min(20, Math.round((wave * 0.5 + climb * 0.5) * peak)));
+  });
+}
+
+const REPORT_A = makeReport({ heightSamples: heights(582, 12, 0) });
+const REPORT_B = makeReport({
+  garbageReceived: 29,
+  garbageSent: 14,
+  garbageCancelled: 3,
+  heightSamples: [...heights(581, 18, 1.4), 20],
+});
+
 const resultState = (role: 'A' | 'B' | 'spectator', winner: 'A' | 'B' | null) => {
-  const result = makeGameOver(winner === null ? { winner: null, reason: 'DRAW' } : { winner });
+  const result = makeGameOver({
+    ...(winner === null ? { winner: null, reason: 'DRAW' as const } : { winner }),
+    report: { A: REPORT_A, B: REPORT_B },
+  });
   return seatedGame({
     role,
     room: makeRoom({
@@ -116,6 +149,37 @@ const resultState = (role: 'A' | 'B' | 'spectator', winner: 'A' | 'B' | null) =>
     result,
   });
 };
+
+/** Ariel took the series 2-1 over a drawn-and-replayed round 2. */
+const SERIES_WON = makeSeries({
+  round: 3,
+  score: { A: 2, B: 1 },
+  over: true,
+  winner: 'A',
+  endReason: 'TWO_WINS',
+  rounds: [
+    { round: 1, replay: false, winner: 'A', reason: 'TOP_OUT', durationTicks: 9000 },
+    { round: 2, replay: false, winner: null, reason: 'DRAW', durationTicks: 4000 },
+    { round: 2, replay: true, winner: 'B', reason: 'TOP_OUT', durationTicks: 7000 },
+    { round: 3, replay: false, winner: 'A', reason: 'TOP_OUT', durationTicks: 17460 },
+  ],
+});
+
+const seriesState = (role: 'A' | 'B' | 'spectator') => {
+  const result = makeGameOver({
+    round: 3,
+    winner: 'A',
+    series: SERIES_WON,
+    report: { A: REPORT_A, B: REPORT_B },
+  });
+  return seatedGame({
+    role,
+    room: makeRoom({ status: 'seriesOver', players: PLAYERS, series: SERIES_WON }),
+    result,
+  });
+};
+
+const LEFT_OWN = { left: boardModel('A', true, 0), right: boardModel('B', false, 0) };
 
 const SCENARIOS: Record<string, Scenario> = {
   home: { path: '/', state: makeClientState() },
@@ -204,6 +268,94 @@ const SCENARIOS: Record<string, Scenario> = {
     state: resultState('spectator', 'A'),
     script: { left: boardModel('A', true, 0), right: boardModel('B', false, 0), standoff: null },
   },
+  'result-short': {
+    path: '/g/K7QM4X',
+    state: seatedGame({
+      role: 'A',
+      room: makeRoom({ status: 'roundOver', players: PLAYERS, series: makeGameOver().series }),
+      result: makeGameOver({
+        report: {
+          A: makeReport({ heightSamples: [0], durationTicks: 30 }),
+          B: makeReport({ heightSamples: [], durationTicks: 30 }),
+        },
+      }),
+    }),
+    script: { ...LEFT_OWN, standoff: null },
+  },
+  'result-waiting': {
+    path: '/g/K7QM4X',
+    state: { ...resultState('A', 'A'), ready: { A: true, B: false } },
+    script: { ...LEFT_OWN, standoff: null },
+  },
+  'series-win': {
+    path: '/g/K7QM4X',
+    state: seriesState('A'),
+    script: { ...LEFT_OWN, standoff: null },
+  },
+  'series-lose': {
+    path: '/g/K7QM4X',
+    state: seriesState('B'),
+    script: { left: boardModel('B', true, 0), right: boardModel('A', false, 0), standoff: null },
+  },
+  'series-spectator': {
+    path: '/g/K7QM4X?watch=1',
+    state: seriesState('spectator'),
+    script: { ...LEFT_OWN, standoff: null },
+  },
+  'series-forfeit': {
+    path: '/g/K7QM4X',
+    state: seatedGame({
+      role: 'A',
+      room: makeRoom({
+        status: 'seriesOver',
+        players: { A: PLAYERS.A },
+        series: makeSeries({
+          round: 2,
+          score: { A: 1, B: 0 },
+          over: true,
+          winner: 'A',
+          endReason: 'OPPONENT_LEFT',
+          rounds: [
+            { round: 1, replay: false, winner: 'A', reason: 'TOP_OUT', durationTicks: 9000 },
+          ],
+        }),
+      }),
+    }),
+    script: { ...LEFT_OWN, standoff: null },
+  },
+  standoff: {
+    path: '/g/K7QM4X',
+    state: seatedGame({
+      room: makeRoom({
+        status: 'countdown',
+        players: PLAYERS,
+        series: makeSeries({ round: 2, score: { A: 1, B: 0 } }),
+      }),
+    }),
+    script: { ...LEFT_OWN, standoff: '2' },
+  },
+  'standoff-spectator': {
+    path: '/g/K7QM4X?watch=1',
+    state: seatedGame({
+      role: 'spectator',
+      room: makeRoom({
+        status: 'countdown',
+        players: PLAYERS,
+        series: makeSeries({ round: 2, replay: true, score: { A: 1, B: 1 } }),
+      }),
+    }),
+    script: { ...LEFT_OWN, standoff: '3' },
+  },
+  'standoff-duel': {
+    path: '/g/K7QM4X',
+    state: seatedGame({}),
+    script: { ...LEFT_OWN, standoff: 'duel' },
+  },
+  'spectator-game': {
+    path: '/g/K7QM4X?watch=1',
+    state: seatedGame({ role: 'spectator', hud: LIVE_HUD }),
+    script: { left: boardModel('A', true, 2), right: boardModel('B', false, 0), standoff: null },
+  },
   fatal: { path: '/', state: makeClientState({ connection: 'closed', closedBy: 'REPLACED' }) },
   banner: {
     path: '/',
@@ -217,12 +369,19 @@ const SCENARIOS: Record<string, Scenario> = {
 };
 
 const noop = () => undefined;
+const musicParam = new URLSearchParams(window.location.search).get('m');
+const musicStatus: MusicStatus =
+  musicParam === 'off' || musicParam === 'blocked' || musicParam === 'unavailable'
+    ? musicParam
+    : 'on';
 const music: Music = {
   unlock: noop,
   start: noop,
   setLevel: noop,
   stop: noop,
-  status: () => 'off',
+  status: () => musicStatus,
+  preference: () => (musicStatus === 'off' ? 'off' : 'on'),
+  lastToggleSource: () => null,
   toggle: noop,
   subscribe: () => noop,
 };

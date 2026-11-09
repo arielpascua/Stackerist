@@ -5,9 +5,10 @@
 import { type RoomCode, type RoomMessage, type Seat, shareUrl } from '@stackerist/protocol';
 import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from '../../../../../design/tokens/tokens.ts';
-import type { Role } from '../../game/contract.ts';
+import type { Music, Role } from '../../game/contract.ts';
 import { ArenaPage, Button, Logo } from '../components/common.tsx';
 import { LeaveConfirm } from '../components/LeaveConfirm.tsx';
+import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
 import type { ErrorPresentation } from '../errors.ts';
 import type { SeatNames } from '../result.ts';
@@ -26,6 +27,7 @@ export interface LobbyProps {
   readonly origin: string;
   readonly copyText: (text: string) => Promise<void>;
   readonly onLeave: () => void;
+  readonly music: Music;
 }
 
 const SEATS: readonly Seat[] = ['A', 'B'];
@@ -209,6 +211,7 @@ export function Lobby(props: LobbyProps) {
           </>
         )}
         <footer className="lobby__footer">
+          <MusicButton music={props.music} />
           <div className="lobby__leave">
             <Button
               ref={leaveRef}

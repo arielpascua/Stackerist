@@ -244,7 +244,14 @@
 
 .lobby__footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Hit targets: 44 px on the lobby (the HUD's 32 px applies to the game top bar only). */
+.lobby__footer .music-btn {
+  min-height: var(--hit-min);
 }
 
 .lobby__leave,

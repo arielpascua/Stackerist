@@ -1,6 +1,9 @@
 /*
  * Arena-only overlays (DESIGN.md "Overlays", z-layer --z-overlay): they cover the arena, not the top
- * bar, and never take pointer events from the game. W2 countdown: dim, round tag, numeral, DUEL!.
+ * bar, and never take pointer events from the game. The standoff (DESIGN.md "Standoff countdown"):
+ * dim, round tag, two name plates facing off around VS, the numeral, then DUEL!. The frame loop only
+ * sets data-phase on the root; every moment below is a CSS rule on that attribute, so DUEL! and the
+ * fade of the dim and the plates change in the same frame that enables input.
  */
 
 .countdown {
@@ -23,6 +26,12 @@
 }
 
 .countdown__content {
+  /* The face-off sits at 38% of the arena and the numeral at 62%; the round tag rides above the plates. */
+  --standoff-top: 38%;
+  --standoff-tag-lift: calc(
+    var(--text-display-md) / 2 + var(--space-2) + var(--space-2) + var(--space-3)
+  );
+
   position: absolute;
   inset: 0;
 }
@@ -36,18 +45,126 @@
   text-align: center;
 }
 
-/* The round tag sits on a chip just above the numeral, clear of the VS column underneath. */
+/* The round tag sits on a chip just above the plates, clear of the VS column underneath. */
 .countdown__round {
-  top: calc(62% - var(--text-display-xl) * 0.75);
+  top: var(--standoff-top);
+  translate: -50% calc(-50% - var(--standoff-tag-lift));
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-line);
   background: var(--surface-card);
   white-space: nowrap;
+  transition: opacity var(--dur-dim) var(--ease-standard);
 }
 
-.countdown[data-phase='duel'] .countdown__round {
-  visibility: hidden;
+/* At DUEL! the dim, the round tag and the plates all fade out together. */
+.countdown[data-phase='duel'] .countdown__round,
+.countdown[data-phase='duel'] .standoff {
+  opacity: 0;
 }
+
+/* ---- The face-off: own plate (amber) left, opponent plate (chalk) right, VS between ---- */
+
+.standoff {
+  position: absolute;
+  top: var(--standoff-top);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding-inline: var(--space-4);
+  translate: -50% -50%;
+  transition: opacity var(--dur-dim) var(--ease-standard);
+}
+
+.standoff__plate {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+}
+
+.standoff__skew {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-5);
+  box-shadow: var(--shadow-onair);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-display-md);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  text-transform: uppercase;
+}
+
+.standoff__plate--left .standoff__skew {
+  background: var(--color-accent);
+}
+
+.standoff__plate--right .standoff__skew {
+  background: var(--color-text);
+}
+
+.standoff__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Series pips on a plate: ink on amber or chalk (a won round is filled, a round to win is outlined). */
+.standoff__skew .pips {
+  --pip-size: var(--space-3);
+}
+
+.standoff__skew .pip {
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+}
+
+.standoff__skew .pip[data-filled='true'] {
+  background: var(--color-ink);
+  box-shadow: none;
+}
+
+.standoff__vs {
+  flex: none;
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-display-md);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+}
+
+/* The plates slide in from either side (static on a resume: --standoff-offset is 0). */
+.standoff__plate--left {
+  animation: plate-in-left var(--dur-standoff-in) var(--ease-out-expo) both;
+}
+
+.standoff__plate--right {
+  animation: plate-in-right var(--dur-standoff-in) var(--ease-out-expo) both;
+}
+
+.countdown[data-kind='resume'] {
+  --standoff-offset: 0px;
+}
+
+@keyframes plate-in-left {
+  from {
+    opacity: 0;
+    translate: calc(var(--standoff-offset) * -1) 0;
+  }
+}
+
+@keyframes plate-in-right {
+  from {
+    opacity: 0;
+    translate: var(--standoff-offset) 0;
+  }
+}
+
+/* ---- Numerals and DUEL! ---- */
 
 .countdown__numeral {
   top: 62%;
@@ -59,16 +176,29 @@
   letter-spacing: var(--tracking-countdown);
 }
 
+/*
+ * Each numeral enters from a larger scale, holds, and leaves 120 ms before the next one (the standoff
+ * is three equal thirds). The a/b names let the frame loop restart the pair by flipping data-swap.
+ */
 .countdown__numeral[data-swap='a'] {
-  animation: numeral-in-a var(--dur-numeral-in) var(--ease-out-expo);
+  animation:
+    numeral-in-a var(--dur-numeral-in) var(--ease-out-expo) backwards,
+    numeral-out-a var(--dur-numeral-out) var(--ease-standard)
+      calc(var(--standoff-total) / 3 - var(--dur-numeral-out)) forwards;
 }
 
 .countdown__numeral[data-swap='b'] {
-  animation: numeral-in-b var(--dur-numeral-in) var(--ease-out-expo);
+  animation:
+    numeral-in-b var(--dur-numeral-in) var(--ease-out-expo) backwards,
+    numeral-out-b var(--dur-numeral-out) var(--ease-standard)
+      calc(var(--standoff-total) / 3 - var(--dur-numeral-out)) forwards;
 }
 
 .countdown__duel {
   top: 50%;
+  /* DUEL! holds, then fades; the whole overlay has pointer-events: none, so it never blocks a key. */
+  animation: duel-out var(--dur-duel-out) var(--ease-standard)
+    calc(var(--dur-duel-slam) + var(--dur-duel-hold)) forwards;
 }
 
 .countdown__duel .onair-skew {
@@ -99,10 +229,28 @@
   }
 }
 
+@keyframes numeral-out-a {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes numeral-out-b {
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes duel-slam {
   from {
     opacity: 0;
     scale: var(--duel-scale-from);
+  }
+}
+
+@keyframes duel-out {
+  to {
+    opacity: 0;
   }
 }
 
@@ -153,14 +301,45 @@
   line-height: var(--leading-display);
 }
 
+/* Narrow screens: smaller plates, so the face-off still fits beside VS. */
+@media (max-width: 600px) {
+  .standoff {
+    gap: var(--space-3);
+    padding-inline: var(--space-3);
+  }
+
+  .standoff__skew {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-display-sm);
+  }
+
+  .standoff__vs {
+    font-size: var(--text-display-sm);
+  }
+}
+
+/*
+ * Reduced motion: the dim appears without travel, the plates are static, the numerals swap without
+ * scale or fade, and DUEL! appears without scale, holds 500 ms and fades over --dur-reduced.
+ */
 @media (prefers-reduced-motion: reduce) {
   .countdown__scrim,
   .disconnect {
     animation-duration: var(--dur-reduced);
   }
 
+  .standoff__plate--left,
+  .standoff__plate--right {
+    animation: fade-in var(--dur-reduced) var(--ease-standard) both;
+  }
+
   .countdown__numeral[data-swap] {
     animation: none;
+  }
+
+  .countdown__duel {
+    animation: duel-out var(--dur-reduced) var(--ease-standard) 500ms forwards;
   }
 
   .countdown__duel .onair-skew {

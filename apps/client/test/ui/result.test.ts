@@ -74,7 +74,8 @@ describe('REQ-050 round result card: verdict, reason, series score, both players
       'Garbage received',
       'Garbage cancelled',
       'Best combo',
-      'Pieces',
+      'Pieces per second',
+      'Actions per minute',
     ]);
     expect(player.rows[0]?.values).toEqual(['31', '48']);
     expect(player.rows[4]?.values).toEqual(['×3', '×6']);
@@ -128,8 +129,8 @@ describe('REQ-050 round result card: verdict, reason, series score, both players
       opponentSeated: false,
       opponentConnected: null,
     });
-    expect(view.headline).toBe(COPY.result.youWin);
-    expect(view.reason).toBe('Sam left the series');
+    expect(view.headline).toBe('Ariel wins the series');
+    expect(view.reason).toBe('Sam left, so the series is yours.');
     expect(view.rows).toEqual([]);
     expect(view.primary?.disabled).toBe(true);
   });

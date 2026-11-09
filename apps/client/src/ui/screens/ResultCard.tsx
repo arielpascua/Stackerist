@@ -1,13 +1,14 @@
 /**
- * The round result card (REQ-050, REQ-051; DESIGN.md "Result: round card"): one card, no tabs. W2
- * has two panels (the stats table and the best moment); W4 adds the report chart between them.
- * Focus moves to the heading after the entrance, never to a button, and the buttons ignore
+ * The round result card and the series winner screen (REQ-050, REQ-051, REQ-084, REQ-091; DESIGN.md
+ * "Result: round card", "Result: series card"): one card, no tabs, three panels side by side (the
+ * report table, the stack-height chart, the best moment). Focus moves to the heading after the entrance, never to a button, and the buttons ignore
  * activation for the first 500 ms so a hard drop hammered at top-out cannot press Next round.
  */
 import { type CSSProperties, useEffect, useId, useRef } from 'react';
 import { computeBestMomentCell, motion } from '../../../../../design/tokens/tokens.ts';
 import type { DrawBestMoment } from '../../game/contract.ts';
 import { Button } from '../components/common.tsx';
+import { StackChart } from '../components/StackChart.tsx';
 import { COPY } from '../copy.ts';
 import { useFitScale } from '../hooks.ts';
 import { scaledHitMinPx } from '../layout.ts';
@@ -90,12 +91,13 @@ export function ResultCard(props: ResultCardProps) {
   };
 
   return (
-    <div className="result" data-art={view.art} data-outcome={view.outcome}>
+    <div className="result" data-art={view.art} data-outcome={view.outcome} data-kind={view.kind}>
       <div className="result__art" aria-hidden="true" />
       <div ref={frameRef} className="result__frame">
         <section
           ref={cardRef}
           className="result-card"
+          data-kind={view.kind}
           role="dialog"
           aria-modal="true"
           aria-labelledby={headingId}
@@ -115,7 +117,7 @@ export function ResultCard(props: ResultCardProps) {
               <h2
                 ref={headingRef}
                 id={headingId}
-                className="headline"
+                className={view.kind === 'series' ? 'headline headline--series' : 'headline'}
                 tabIndex={-1}
                 data-testid={TEST_IDS.result.headline}
               >
@@ -125,23 +127,50 @@ export function ResultCard(props: ResultCardProps) {
                 {view.reason}
               </p>
             </div>
-            <div className="series-bug" data-testid={TEST_IDS.result.seriesScore}>
-              <p className="label">{COPY.result.seriesLabel}</p>
-              <p className="series-bug__score">
-                <span className="series-bug__name" title={view.series.A.name}>
-                  {view.series.A.name}
-                </span>
-                <span className="series-bug__digits">
-                  {view.series.A.score} – {view.series.B.score}
-                </span>
-                <span className="series-bug__name" title={view.series.B.name}>
-                  {view.series.B.name}
-                </span>
-              </p>
+            <div className="series-bug" data-kind={view.kind}>
+              <div data-testid={TEST_IDS.result.seriesScore} className="series-bug__group">
+                <p className="label">{COPY.result.seriesLabel}</p>
+                <p className="series-bug__score">
+                  <span className="series-bug__name" title={view.series.A.name}>
+                    {view.series.A.name}
+                  </span>
+                  <span className="series-bug__digits">
+                    {view.series.A.score} – {view.series.B.score}
+                  </span>
+                  <span className="series-bug__name" title={view.series.B.name}>
+                    {view.series.B.name}
+                  </span>
+                </p>
+              </div>
+              {view.chips.length > 0 ? (
+                <ul className="round-chips" data-testid={TEST_IDS.result.chips}>
+                  {view.chips.map((chip, index) => (
+                    <li
+                      key={index}
+                      className="round-chip"
+                      data-draw={chip.draw ? 'true' : undefined}
+                      data-testid={TEST_IDS.result.chip}
+                    >
+                      <span aria-hidden="true" className="round-chip__text">
+                        <span className="label">{chip.label}</span>
+                        {chip.draw ? null : (
+                          <span className="round-chip__winner" title={chip.winner}>
+                            {chip.winner}
+                          </span>
+                        )}
+                      </span>
+                      <span className="sr-only">{chip.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </header>
           {view.rows.length > 0 ? (
-            <div className="result-card__body" data-panels={1 + view.bestMoments.length}>
+            <div
+              className="result-card__body"
+              data-panels={1 + (view.chart === null ? 0 : 1) + view.bestMoments.length}
+            >
               <table className="report" data-testid={TEST_IDS.result.statsTable}>
                 <caption className="sr-only">{COPY.result.statsCaption}</caption>
                 <thead>
@@ -169,6 +198,7 @@ export function ResultCard(props: ResultCardProps) {
                   ))}
                 </tbody>
               </table>
+              {view.chart === null ? null : <StackChart model={view.chart} />}
               {view.bestMoments.map((moment) => (
                 <BestMoment
                   key={moment.seat}

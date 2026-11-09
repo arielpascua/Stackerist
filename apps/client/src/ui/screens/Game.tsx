@@ -11,6 +11,7 @@ import type { ClientState, CoreServices, Role, StandoffPhase } from '../../game/
 import { BANNER_HIDDEN, type BannerState, type BannerTiming, stepBanner } from '../combo.ts';
 import { Button, Logo } from '../components/common.tsx';
 import { LeaveConfirm } from '../components/LeaveConfirm.tsx';
+import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
 import { formatClock } from '../format.ts';
 import { useFitScale, useReducedMotion, useViewport } from '../hooks.ts';
@@ -239,6 +240,7 @@ export function Game(props: GameProps) {
             </p>
           ) : null}
           <Ping rttMs={state.rttMs} />
+          <MusicButton music={services.music} />
           <div className="topbar__leave">
             <Button
               ref={leaveRef}
@@ -318,9 +320,12 @@ export function Game(props: GameProps) {
           liveRef={countdownLive}
           roundLabel={
             room.series.replay
-              ? `${COPY.game.roundTag(room.series.round)} · ${COPY.game.replay}`
+              ? COPY.game.roundTagReplay(room.series.round)
               : COPY.game.roundTag(room.series.round)
           }
+          left={{ name: names[leftSeat], won: score[leftSeat] }}
+          right={{ name: names[rightSeat], won: score[rightSeat] }}
+          kind={resuming ? 'resume' : 'start'}
         />
         {lostConnection ? (
           <DisconnectOverlay opponent={null} spectator={spectator} graceSeconds={GRACE_MS / 1000} />
