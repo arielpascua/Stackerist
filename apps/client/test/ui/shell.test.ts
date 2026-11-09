@@ -12,7 +12,7 @@ import { COPY } from '../../src/ui/copy.ts';
 import { isApplePlatform, isTouchOnly, KeyboardProof } from '../../src/ui/device.ts';
 import { presentClose, presentError } from '../../src/ui/errors.ts';
 import { formatClock, formatTicks, secondsLeft } from '../../src/ui/format.ts';
-import { fitScale, legendIsShort } from '../../src/ui/layout.ts';
+import { fitScale, HIT_MIN_PX, legendIsShort, scaledHitMinPx } from '../../src/ui/layout.ts';
 import { rememberState } from '../../src/ui/memory.ts';
 import { entranceDelayMs } from '../../src/ui/screens/ResultCard.tsx';
 import { makeClientState, makeRoom } from './fixtures.ts';
@@ -164,6 +164,29 @@ describe('REQ-056 the game screen fits 1280×600 and scales down below it', () =
   it('REQ-056 below 1100 px the legend drops M and Esc', () => {
     expect(legendIsShort(1099)).toBe(true);
     expect(legendIsShort(1280)).toBe(false);
+  });
+});
+
+describe('REQ-050 result card buttons keep a 44 px tap height when the card is scaled down', () => {
+  it('REQ-050 nothing is added at full size, so the 1280×600 layout is untouched', () => {
+    expect(scaledHitMinPx(1)).toBe(0);
+    expect(scaledHitMinPx(2)).toBe(0);
+  });
+
+  it('REQ-050 the rendered height after the scale is at least 44 px at every scale', () => {
+    for (const scale of [0.99, 0.95, 0.87, 0.75, 0.56, 0.4, 0.2]) {
+      expect(scaledHitMinPx(scale) * scale).toBeGreaterThanOrEqual(HIT_MIN_PX);
+    }
+  });
+
+  it('REQ-050 the measured failure: 0.87 needs more than the 44 px box', () => {
+    expect(scaledHitMinPx(0.87)).toBeGreaterThan(HIT_MIN_PX);
+  });
+
+  it('REQ-050 a bad scale never produces a negative, infinite or NaN height', () => {
+    expect(scaledHitMinPx(0)).toBe(0);
+    expect(scaledHitMinPx(-1)).toBe(0);
+    expect(scaledHitMinPx(Number.NaN)).toBe(0);
   });
 });
 

@@ -127,7 +127,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: 0;
   min-width: 0;
   text-align: center;
 }
@@ -143,8 +143,13 @@
   user-select: all;
 }
 
+/* The link only selects text (Copy link is the control), but it is held to the 44 px floor too. */
 .share-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   max-width: 100%;
+  min-height: var(--hit-min);
   color: var(--color-text-muted);
   font-size: var(--text-table);
   line-height: var(--leading-small);

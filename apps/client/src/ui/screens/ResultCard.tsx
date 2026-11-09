@@ -10,6 +10,7 @@ import type { DrawBestMoment } from '../../game/contract.ts';
 import { Button } from '../components/common.tsx';
 import { COPY } from '../copy.ts';
 import { useFitScale } from '../hooks.ts';
+import { scaledHitMinPx } from '../layout.ts';
 import type { BestMomentView, ResultView } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
 
@@ -98,7 +99,12 @@ export function ResultCard(props: ResultCardProps) {
           role="dialog"
           aria-modal="true"
           aria-labelledby={headingId}
-          style={{ '--result-scale': scale } as CSSProperties}
+          style={
+            {
+              '--result-scale': scale,
+              '--result-hit-min': `${String(scaledHitMinPx(scale))}px`,
+            } as CSSProperties
+          }
           data-testid={TEST_IDS.result.card}
         >
           <header className="result-card__head">

@@ -6,6 +6,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { HIT_MIN_PX } from '../../src/ui/layout.ts';
 
 const SRC = fileURLToPath(new URL('../../src/', import.meta.url));
 
@@ -58,6 +59,28 @@ describe('REQ-057 Prime Time styling comes from the tokens only', () => {
     expect(
       offenders(files(SRC, /\.(ts|tsx|css)$/), /concept-art|pt-(logo|backdrop|win)\.png/),
     ).toEqual([]);
+  });
+});
+
+describe('REQ-048 hit areas', () => {
+  const tokens = readFileSync(
+    fileURLToPath(new URL('../../../../design/tokens/tokens.css', import.meta.url)),
+    'utf8',
+  );
+  const pages = readFileSync(join(SRC, 'styles', 'pages.css'), 'utf8');
+
+  it('REQ-050 HIT_MIN_PX mirrors --hit-min in tokens.css', () => {
+    expect(tokens).toContain(`--hit-min: ${String(HIT_MIN_PX)}px;`);
+  });
+
+  it('REQ-048 the lobby share link is a real 44 px tall box (--hit-min), not a bleed', () => {
+    expect(pages).toMatch(/\.share-link\s*\{[^}]*min-height: var\(--hit-min\)/);
+  });
+
+  it('REQ-050 result card buttons take min-height from --result-hit-min (scale-aware) and --hit-min', () => {
+    const result = readFileSync(join(SRC, 'styles', 'result.css'), 'utf8');
+    expect(result).toMatch(/max\(var\(--hit-min\), var\(--result-hit-min, 0px\)\)/);
+    expect(result).toMatch(/max\(var\(--space-12\), var\(--result-hit-min, 0px\)\)/);
   });
 });
 

@@ -244,6 +244,20 @@
   gap: var(--space-3);
 }
 
+/*
+ * The card scales as a whole on small screens, which shrinks its 44 px buttons. ResultCard sets
+ * --result-hit-min to the CSS height that renders at --hit-min after the scale; it is 0 at full size,
+ * so the 1280×600 layout is untouched. The buttons are really that tall (not a bleed), so the tap
+ * area is the visible button and nothing overflows.
+ */
+.result-card__actions .btn--primary {
+  min-height: max(var(--space-12), var(--result-hit-min, 0px));
+}
+
+.result-card__actions .btn--secondary {
+  min-height: max(var(--hit-min), var(--result-hit-min, 0px));
+}
+
 .result-card__status {
   flex: 1 1 auto;
   min-width: 0;
