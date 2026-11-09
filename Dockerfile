@@ -26,6 +26,10 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json tsconfig.build.json ./
 COPY packages/ packages/
 COPY apps/ apps/
+# The client imports design/tokens/* (TS + CSS) and design/assets/*.webp (Vite asset imports).
+# Nothing else from design/ is needed (concept art and reference screenshots stay out).
+COPY design/tokens/ design/tokens/
+COPY design/assets/ design/assets/
 RUN pnpm build
 
 # ---- prod-deps: runtime dependencies of the server and its workspace packages only ----

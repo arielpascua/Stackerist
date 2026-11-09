@@ -4,6 +4,6 @@ import { defineConfig } from 'vitest/config';
 // Engine coverage (90% lines, REQ-067): `pnpm test:coverage`.
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'apps/*'],
+    projects: ['packages/*', 'apps/*', 'tools'],
   },
 });
