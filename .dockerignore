@@ -8,6 +8,7 @@
 # Tests and test output are not part of the image.
 **/test
 e2e
+tools
 playwright-report
 test-results
 reports
@@ -20,9 +21,14 @@ reports
 .superpowers
 .playwright-mcp
 docs
-design
 spec (1).md
 *.md
+
+# design/: only what the client build imports (tokens + webp assets); concept art and
+# reference screenshots stay out. `design/*` (not `design`) so the re-includes below apply.
+design/*
+!design/tokens
+!design/assets
 
 # Secrets and local noise. Never send env files into the build context.
 .env

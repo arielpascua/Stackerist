@@ -10,6 +10,7 @@
     { "path": "./apps/server" },
     { "path": "./apps/client" },
     { "path": "./e2e" },
+    { "path": "./tools" },
     { "path": "./tsconfig.tools.json" }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../tsconfig.base.json",
+  // Repo-level conformance tests (run by Vitest in Node; tsc only typechecks).
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.tools-conformance.tsbuildinfo"
+  },
+  "include": ["test/**/*.ts", "vitest.config.ts"]
+}
