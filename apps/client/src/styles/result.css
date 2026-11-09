@@ -53,7 +53,7 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
   width: max-content;
   max-width: var(--result-card-max);
   padding: var(--space-5) var(--space-7);
@@ -161,7 +161,7 @@
   align-items: start;
   justify-content: space-between;
   gap: var(--space-8);
-  padding: var(--space-4) 0;
+  padding: var(--space-3) 0;
   border-block: 1px solid var(--color-line);
 }
 
@@ -213,12 +213,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
 }
 
+/* Room for the banner's hard offset shadow between the label and the board. */
+.best-moment__title {
+  margin-block: var(--space-1);
+}
+
 .best-moment__title .onair-skew {
-  padding: var(--space-1) var(--space-3);
+  padding: calc(var(--space-1) / 2) var(--space-3);
   background: var(--color-accent);
   box-shadow: var(--shadow-onair-sm);
   color: var(--color-ink);
@@ -269,6 +274,7 @@
 
 .headline--series {
   max-width: 18ch;
+  margin: 0;
   font-size: var(--text-display-md);
   line-height: var(--leading-display);
   letter-spacing: 0;

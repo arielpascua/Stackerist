@@ -139,6 +139,11 @@ describe('REQ-091 stack-height chart geometry', () => {
     }
   });
 
+  it('REQ-091 a round shorter than a second labels the start once, not "0:00" twice', () => {
+    expect(xAxisTicks(30).map((tick) => tick.label)).toEqual(['0:00']);
+    expect(xAxisTicks(1).map((tick) => tick.label)).toEqual(['0:00']);
+  });
+
   it('REQ-091 axis times read m:ss', () => {
     expect(formatAxisTime(0)).toBe('0:00');
     expect(formatAxisTime(60 * 220)).toBe('3:40');

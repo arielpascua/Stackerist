@@ -127,8 +127,10 @@ export function xAxisTicks(domainTicks: number): readonly AxisTick[] {
       }
     }
   }
-  if (endX - MARGIN.left >= MIN_LABEL_GAP) {
-    ticks.push({ x: endX, label: formatAxisTime(domainTicks), anchor: 'end' });
+  const endLabel = formatAxisTime(domainTicks);
+  // A round shorter than a second would label both ends "0:00": say it once.
+  if (endX - MARGIN.left >= MIN_LABEL_GAP && endLabel !== ticks[0]?.label) {
+    ticks.push({ x: endX, label: endLabel, anchor: 'end' });
   }
   return ticks;
 }

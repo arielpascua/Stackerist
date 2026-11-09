@@ -133,7 +133,7 @@ export function StackChart({ model }: { readonly model: ChartModel }) {
             {model.dangerLabel}
           </text>
           {model.xTicks.map((tick) => (
-            <text key={tick.label} x={tick.x} y={X_LABEL_Y} textAnchor={tick.anchor}>
+            <text key={tick.x} x={tick.x} y={X_LABEL_Y} textAnchor={tick.anchor}>
               {tick.label}
             </text>
           ))}
