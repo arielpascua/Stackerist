@@ -51,22 +51,26 @@ test.describe('two players, one real round', () => {
         await expect(player.page.getByTestId(TEST_IDS.game.roomCode)).toHaveText(code);
       }
       const own = { a: a.name, b: b.name };
-      await expect(a.page.getByTestId(TEST_IDS.game.ownName)).toHaveText(own.a);
-      await expect(a.page.getByTestId(TEST_IDS.game.oppName)).toHaveText(own.b);
-      await expect(b.page.getByTestId(TEST_IDS.game.ownName)).toHaveText(own.b);
-      await expect(b.page.getByTestId(TEST_IDS.game.oppName)).toHaveText(own.a);
+      await test.step("REQ-022 each player's screen names their own board and the opponent's", async () => {
+        await expect(a.page.getByTestId(TEST_IDS.game.ownName)).toHaveText(own.a);
+        await expect(a.page.getByTestId(TEST_IDS.game.oppName)).toHaveText(own.b);
+        await expect(b.page.getByTestId(TEST_IDS.game.ownName)).toHaveText(own.b);
+        await expect(b.page.getByTestId(TEST_IDS.game.oppName)).toHaveText(own.a);
+      });
 
-      for (const player of [a, b]) {
-        await waitUntilLive(player);
-        for (const canvas of [ownCanvas(player.page), oppCanvas(player.page)]) {
-          await expect(canvas).toBeVisible();
-          await expect(canvas).not.toHaveAttribute(DATA_HOOKS.active, '');
-          const box = await canvas.boundingBox();
-          expect(box?.width ?? 0).toBeGreaterThan(0);
-          expect(box?.height ?? 0).toBeGreaterThan(0);
+      await test.step("REQ-022 each player sees their own and the opponent's board live, a piece falling on both", async () => {
+        for (const player of [a, b]) {
+          await waitUntilLive(player);
+          for (const canvas of [ownCanvas(player.page), oppCanvas(player.page)]) {
+            await expect(canvas).toBeVisible();
+            await expect(canvas).not.toHaveAttribute(DATA_HOOKS.active, '');
+            const box = await canvas.boundingBox();
+            expect(box?.width ?? 0).toBeGreaterThan(0);
+            expect(box?.height ?? 0).toBeGreaterThan(0);
+          }
+          await expect(player.page.getByTestId(TEST_IDS.countdown.overlay)).toBeHidden();
         }
-        await expect(player.page.getByTestId(TEST_IDS.countdown.overlay)).toBeHidden();
-      }
+      });
 
       // Hard-drop (Space) on both until somebody tops out.
       const ended = await hardDropUntilResult([a, b]);
