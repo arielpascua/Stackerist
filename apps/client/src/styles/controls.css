@@ -1,0 +1,194 @@
+/* Buttons and inputs (DESIGN.md "Buttons", "Inputs"). Colour transitions only; nothing moves layout. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--hit-min);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-ui);
+  font-weight: var(--weight-body-strong);
+  line-height: var(--leading-label);
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--dur-hover) var(--ease-standard),
+    border-color var(--dur-hover) var(--ease-standard),
+    color var(--dur-hover) var(--ease-standard),
+    box-shadow var(--dur-hover) var(--ease-standard),
+    translate var(--dur-press) var(--ease-standard);
+}
+
+.btn:active:not(:disabled, [aria-disabled='true']) {
+  translate: 0 1px;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.btn[aria-busy='true'] {
+  cursor: progress;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+/* Primary: one per view. */
+.btn--primary {
+  min-height: var(--space-12);
+  background: var(--color-accent);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  font-weight: var(--weight-display-black);
+  line-height: var(--leading-display);
+  letter-spacing: var(--tracking-button);
+  text-transform: uppercase;
+}
+
+.btn--primary:hover:not(:disabled, [aria-disabled='true']) {
+  box-shadow: inset 0 0 0 1px var(--color-ink-soft);
+}
+
+.btn--primary:disabled,
+.btn--primary[aria-disabled='true']:not([aria-busy='true']) {
+  background: var(--color-panel);
+  color: var(--color-text-muted);
+}
+
+/* Secondary. */
+.btn--secondary {
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
+
+.btn--secondary:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-panel);
+}
+
+.btn--secondary:disabled,
+.btn--secondary[aria-disabled='true']:not([aria-busy='true']) {
+  color: var(--color-text-muted);
+}
+
+/* HUD: Leave, Stop watching, banner actions. */
+.btn--hud {
+  min-height: var(--hit-hud);
+  padding: 0 var(--space-3);
+  border-color: var(--color-line);
+  background: var(--surface-chip);
+  color: var(--color-text);
+  font-size: var(--text-meta);
+}
+
+.btn--hud:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-panel);
+  border-color: var(--color-text-muted);
+}
+
+/* Destructive: Leave series. */
+.btn--destructive {
+  border-color: var(--color-alert);
+  color: var(--color-alert);
+}
+
+.btn--destructive:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--color-panel);
+}
+
+/* Label swap (Creating…, Joining…, Copied!) without a width change: both labels share one cell. */
+.btn__labels {
+  display: inline-grid;
+}
+
+.btn__label {
+  grid-area: 1 / 1;
+}
+
+.btn__label--busy,
+.btn[data-loading='true'] .btn__label--idle,
+.btn[data-copied='true'] .btn__label--idle {
+  visibility: hidden;
+}
+
+.btn[data-loading='true'] .btn__label--busy,
+.btn[data-copied='true'] .btn__label--busy {
+  visibility: visible;
+}
+
+/* ---- Inputs ---- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  height: var(--hit-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius-control);
+  background: var(--color-well);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  caret-color: var(--color-accent);
+  transition: border-color var(--dur-hover) var(--ease-standard);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.input:hover:not([readonly]) {
+  border-color: var(--color-text);
+}
+
+.input:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-alert);
+}
+
+.input[aria-disabled='true'] {
+  color: var(--color-text-muted);
+}
+
+.input--code {
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  font-weight: var(--weight-display-heavy);
+  letter-spacing: var(--tracking-code-input);
+  text-transform: uppercase;
+}
+
+.field-error {
+  max-width: var(--measure-prose);
+  color: var(--color-alert);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled, [aria-disabled='true']) {
+    translate: none;
+  }
+}

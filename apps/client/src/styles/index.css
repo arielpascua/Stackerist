@@ -1,0 +1,17 @@
+/*
+ * Stackerist UI styles. Fonts are self-hosted through @fontsource (full weight files, so accented
+ * names download only the subsets they need); every colour, size, radius, shadow, z-index and
+ * duration comes from design/tokens/tokens.css.
+ */
+@import '@fontsource/big-shoulders-display/700';
+@import '@fontsource/big-shoulders-display/800';
+@import '@fontsource/big-shoulders-display/900';
+@import '@fontsource/archivo/400';
+@import '@fontsource/archivo/600';
+@import '../../../../design/tokens/tokens.css';
+@import './base.css';
+@import './controls.css';
+@import './pages.css';
+@import './game.css';
+@import './overlays.css';
+@import './result.css';
