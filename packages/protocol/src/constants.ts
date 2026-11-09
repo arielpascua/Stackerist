@@ -114,3 +114,18 @@ export const CLOSE_CODES = {
   SERVER_SHUTDOWN: 1001,
 } as const;
 export type CloseCodeName = keyof typeof CLOSE_CODES;
+
+/**
+ * Server-initiated closes the client already handles generically: any close code that is not in
+ * `CLOSE_CODES` (and is not 1000) makes `net/socket.ts` reconnect with backoff and rejoin with its
+ * stored token. They are kept out of `CLOSE_CODES` on purpose: that object's names are exhaustive in
+ * the client's close policy, and these two are deliberately "recoverable, no new screen". The close
+ * `reason` string is the key name here too.
+ */
+export const RECOVERABLE_CLOSE_CODES = {
+  /** The socket's send buffer passed `Limits.maxBufferedBytes`: it can't keep up. Rejoin to resume. */
+  SLOW_CONSUMER: 4005,
+  /** RFC 6455 "Try Again Later" (1013): too many sockets from this network, or the server is full. */
+  TRY_AGAIN_LATER: 1013,
+} as const;
+export type RecoverableCloseName = keyof typeof RECOVERABLE_CLOSE_CODES;

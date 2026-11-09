@@ -247,6 +247,8 @@ export const COPY = {
     rateLimited:
       'You were disconnected for sending inputs too fast. Go back to home to play again.',
     connectionLost: 'Connection lost. Reconnecting…',
+    slowConnection:
+      'Your connection is too slow to keep up, so the server let go of it. Reconnecting you to your game…',
     cantReach: "Can't reach Stackerist. Check your internet connection, then try again.",
     seatExpired:
       'That game has ended or your seat expired. Create a new game or join with a new code.',

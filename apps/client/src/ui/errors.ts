@@ -3,7 +3,7 @@
  * to where each one is shown. Ruling G3: ROOM_FULL has its own copy; the internal codes share one
  * generic recoverable line; codes only a bug or a cheat can cause are logged, never shown.
  */
-import type { CloseCodeName, ErrorCode } from '@stackerist/protocol';
+import { RECOVERABLE_CLOSE_CODES, type CloseCodeName, type ErrorCode } from '@stackerist/protocol';
 import { COPY } from './copy.ts';
 import type { IntentKind } from './intent.ts';
 
@@ -71,7 +71,7 @@ export type ClosePresentation =
   /** A full-screen plate: the session cannot continue. */
   | { readonly kind: 'fatal'; readonly text: string; readonly actions: readonly CloseAction[] }
   /** The connection dropped; the reconnect banner (or the in-match overlay) covers it. */
-  | { readonly kind: 'connection' };
+  | { readonly kind: 'connection'; readonly text?: string };
 
 /** The presentation of a socket close, by its close-code name. */
 export function presentClose(name: CloseCodeName): ClosePresentation {
@@ -88,6 +88,21 @@ export function presentClose(name: CloseCodeName): ClosePresentation {
       return { kind: 'fatal', text: COPY.errors.serverRestarted, actions: ['home'] };
     case 'PONG_TIMEOUT':
       return { kind: 'connection' };
+  }
+}
+
+/**
+ * The close codes the server sends that `CLOSE_CODES` doesn't name (`RECOVERABLE_CLOSE_CODES`): the
+ * socket reconnects and rejoins with its token on its own, so this is only the reason to show.
+ */
+export function presentRecoverableClose(code: number): ClosePresentation | null {
+  switch (code) {
+    case RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER:
+      return { kind: 'connection', text: COPY.errors.slowConnection };
+    case RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER:
+      return { kind: 'connection', text: COPY.errors.serverBusy };
+    default:
+      return null;
   }
 }
 

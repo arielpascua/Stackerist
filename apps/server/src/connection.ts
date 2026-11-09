@@ -11,6 +11,7 @@ import {
   MAX_FRAME_BYTES,
   PING_INTERVAL_MS,
   PONG_TIMEOUT_MS,
+  RECOVERABLE_CLOSE_CODES,
   normalizeRoomCode,
   parseClientMessage,
   type ClientMessage,
@@ -27,12 +28,20 @@ import {
 import type { RawData, WebSocket } from 'ws';
 import { resolveClientIp, type ClientIpConfig } from './clientIp.js';
 import type { Clock, TimerId } from './clock.js';
-import { CLOSE, ERR, ERROR_TEXT } from './codes.js';
+import { CLOSE, ERR, ERROR_TEXT, type AnyCloseName } from './codes.js';
 import { IP_WINDOW_MS, type Limits } from './config.js';
 import type { AnticheatRule, EventLog } from './log.js';
-import { SlidingWindowCounter } from './rateLimit.js';
+import { SlidingWindowCounter, TokenBucket } from './rateLimit.js';
 import type { Room, RoomRegistry } from './rooms.js';
 import { safeCall } from './safe.js';
+
+export interface ConnectionOptions {
+  readonly maxBufferedBytes: number;
+  readonly nonInputBurst: number;
+  readonly nonInputRefillPerSec: number;
+  /** Called (in a microtask) after the socket was closed for a full send buffer. */
+  readonly onOverflow: (conn: Connection) => void;
+}
 
 /** One WebSocket. `room`/`role` are the binding; the IP stays in memory for the flood windows only. */
 export class Connection {
@@ -49,22 +58,62 @@ export class Connection {
   lastPongAt: number;
   rttMs: number | null = null;
   pingTimer: TimerId | null = null;
+  /** Non-input messages (join, rejoin, leave, rematch, pong, create): one token each (F9). */
+  readonly nonInputBucket: TokenBucket;
   readonly #clock: Clock;
+  readonly #options: ConnectionOptions;
+  /** `t` of the pings that may still be answered (at most PONG_TIMEOUT_MS old). */
+  #outstandingPings: number[] = [];
 
-  constructor(id: number, socket: WebSocket, ip: string, clock: Clock) {
+  constructor(id: number, socket: WebSocket, ip: string, clock: Clock, options: ConnectionOptions) {
     this.id = id;
     this.#socket = socket;
     this.ip = ip;
     this.#clock = clock;
+    this.#options = options;
     this.lastPongAt = clock.monotonicMs();
+    this.nonInputBucket = new TokenBucket(
+      options.nonInputBurst,
+      options.nonInputRefillPerSec,
+      clock.monotonicMs(),
+    );
   }
 
   send(msg: ServerMessage): void {
     this.sendText(JSON.stringify(msg));
   }
 
+  /**
+   * Every server → client frame goes through here. A socket whose queue is already above the cap is a
+   * reader that isn't reading (F1): it is closed SLOW_CONSUMER and nothing more is queued for it, so
+   * the buffer is bounded by the cap plus one frame. It rejoins with its token like any dropped client.
+   */
   sendText(text: string): void {
-    if (this.#socket.readyState === this.#socket.OPEN) this.#socket.send(text);
+    const socket = this.#socket;
+    if (this.closing || socket.readyState !== socket.OPEN) return;
+    if (socket.bufferedAmount > this.#options.maxBufferedBytes) {
+      this.close(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER, CLOSE.SLOW_CONSUMER);
+      // The seat/spectator bookkeeping runs after the current broadcast, never inside it.
+      queueMicrotask(() => {
+        this.#options.onOverflow(this);
+      });
+      return;
+    }
+    socket.send(text);
+  }
+
+  /** Remembers that a ping with this `t` went out and may be answered. */
+  recordPing(t: number, nowMs: number): void {
+    this.#outstandingPings = this.#outstandingPings.filter((p) => nowMs - p <= PONG_TIMEOUT_MS);
+    this.#outstandingPings.push(t);
+  }
+
+  /** True once per outstanding ping: a blind, stale or replayed `pong` gets false (F1). */
+  consumePing(t: number, nowMs: number): boolean {
+    const index = this.#outstandingPings.indexOf(t);
+    if (index < 0) return false;
+    this.#outstandingPings.splice(index, 1);
+    return nowMs - t <= PONG_TIMEOUT_MS;
   }
 
   sendError(code: ErrorCode): void {
@@ -79,7 +128,7 @@ export class Connection {
   }
 
   /** Close with a protocol close code; the reason string is the code's name (decision 19). */
-  close(code: number, reason: CloseCodeName): void {
+  close(code: number, reason: AnyCloseName): void {
     if (this.closing) return;
     this.closing = true;
     this.stopPing();
@@ -141,8 +190,17 @@ export class ConnectionHub {
 
   /** Called synchronously from the WebSocket route: listeners are attached before returning. */
   accept(socket: WebSocket, req: UpgradeRequest): void {
-    const { clock, log, clientIp } = this.#deps;
-    const conn = new Connection(this.#nextId, socket, resolveClientIp(req, clientIp), clock);
+    const { clock, log, clientIp, limits } = this.#deps;
+    const conn = new Connection(this.#nextId, socket, resolveClientIp(req, clientIp), clock, {
+      maxBufferedBytes: limits.maxBufferedBytes,
+      nonInputBurst: limits.nonInputBurst,
+      nonInputRefillPerSec: limits.nonInputRefillPerSec,
+      onOverflow: (slow) => {
+        safeCall(log, { conn: slow.id }, () => {
+          this.#onOverflow(slow);
+        });
+      },
+    });
     this.#nextId += 1;
     this.#conns.add(conn);
     socket.on('message', (data, isBinary) => {
@@ -392,8 +450,10 @@ export class ConnectionHub {
 
   // ------------------------------------------------------------ ping / pong / close
 
+  /** Liveness only for a pong that answers an outstanding ping; a blind pong changes nothing (F1). */
   #pong(conn: Connection, msg: PongMessage): void {
     const now = this.#deps.clock.monotonicMs();
+    if (!conn.consumePing(msg.t, now)) return;
     conn.lastPongAt = now;
     const rtt = now - msg.t;
     if (rtt >= 0 && rtt <= PONG_TIMEOUT_MS) conn.rttMs = Math.round(rtt);
@@ -409,7 +469,9 @@ export class ConnectionHub {
       this.#disconnect(conn, CLOSE.PONG_TIMEOUT);
       return;
     }
-    conn.send({ type: 'ping', t: Math.round(now), rtt: conn.rttMs });
+    const t = Math.round(now);
+    conn.recordPing(t, now);
+    conn.send({ type: 'ping', t, rtt: conn.rttMs });
     conn.pingTimer = clock.setTimeout(() => {
       safeCall(log, { conn: conn.id }, () => {
         this.#ping(conn);
@@ -422,6 +484,15 @@ export class ConnectionHub {
     const room = conn.room;
     conn.close(CLOSE_CODES[name], name);
     room?.onConnectionClosed(conn);
+  }
+
+  /** A socket was just closed for a full send buffer: an unexpected disconnect for its seat, at once. */
+  #onOverflow(conn: Connection): void {
+    this.#deps.log.anticheat(CLOSE.SLOW_CONSUMER, {
+      conn: conn.id,
+      ...(conn.room === null ? {} : { room: conn.room.code }),
+    });
+    conn.room?.onConnectionClosed(conn);
   }
 
   #onClose(conn: Connection, code: number): void {

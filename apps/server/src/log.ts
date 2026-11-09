@@ -26,6 +26,7 @@ export const LOG_EVENT_NAMES = [
   'process.unhandledRejection',
   'process.uncaughtException',
   'server.listening',
+  'clientip.header_missing',
 ] as const;
 export type LogEventName = (typeof LOG_EVENT_NAMES)[number];
 
@@ -47,11 +48,15 @@ export const ANTICHEAT_RULES = [
   ERR.SERVER_BUSY,
   ERR.ALREADY_IN_ROOM,
   'PAUSE_LIMIT_FORFEIT',
+  CLOSE.SLOW_CONSUMER,
+  'NON_INPUT_DROP',
+  'SOCKET_LIMIT',
 ] as const;
 export type AnticheatRule = (typeof ANTICHEAT_RULES)[number];
 
 /** Why a room was deleted (room.closed). */
-export type RoomClosedReason = 'EMPTY' | 'WAITING_EXPIRED' | 'ABANDONED' | 'ABORTED' | 'SHUTDOWN';
+export type RoomClosedReason =
+  'EMPTY' | 'WAITING_EXPIRED' | 'ABANDONED' | 'ABORTED' | 'SHUTDOWN' | 'IDLE' | 'MAX_AGE';
 export type LogReason = GameOverReason | 'TWO_WINS' | RoomClosedReason | CloseCodeName;
 
 /** The only fields a log line may carry. Never names, IPs, tokens or headers. */
