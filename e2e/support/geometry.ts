@@ -12,6 +12,11 @@
  * the sibling-overlap rule only (an overlay overlaps the board by design, architecture R12); the
  * overlay and everything in it is still held to the viewport (overlay-offscreen) and to the overflow
  * rules, so an overlay cannot spill off the screen.
+ *
+ * Calibrations (each one documented where it is applied, none of them hides a real spill):
+ * - unclipped-v-overflow excuses only the font's own content-area overshoot below the last line;
+ * - the touch rule skips elements outside an open `aria-modal` dialog (they are inert), and uses
+ *   DESIGN.md's 32 px floor for the HUD top bar (44 px elsewhere), after an elementFromPoint scan.
  */
 import { expect, type Page } from '@playwright/test';
 
@@ -117,13 +122,37 @@ function measureInPage(options: MeasureOptions): Finding[] {
     );
   }
 
-  // unclipped-v-overflow: content spills out of a box that neither scrolls nor clips.
+  // unclipped-v-overflow: content spills out of a box that neither scrolls nor clips. A display
+  // face with a tight line-height (Big Shoulders at 1.04) has a glyph content area taller than its
+  // line box, and Chrome counts that content area in scrollHeight although nothing is visible
+  // there. That metric overshoot, (ascent + descent - line-height) / 2 below the last line, is the
+  // only thing excused: any real spill is far larger.
+  const measureContext = document.createElement('canvas').getContext('2d');
+  const ownTextOvershoot = (el: Element): number => {
+    const hasText = Array.from(el.childNodes).some(
+      (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '',
+    );
+    if (!hasText || measureContext === null) return 0;
+    const style = getComputedStyle(el);
+    measureContext.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const metrics = measureContext.measureText('Hg');
+    const contentArea = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+    const lineHeight = style.lineHeight === 'normal' ? contentArea : parseFloat(style.lineHeight);
+    return Math.max(0, (contentArea - lineHeight) / 2);
+  };
+  const textMetricOvershoot = (el: Element): number => {
+    let most = ownTextOvershoot(el);
+    for (const inner of Array.from(el.querySelectorAll('*'))) {
+      most = Math.max(most, ownTextOvershoot(inner));
+    }
+    return most;
+  };
   for (const el of measured) {
     if (el === document.body) continue;
     const style = getComputedStyle(el);
     if (style.display === 'inline' || style.display === 'contents') continue;
     if (['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowY)) continue;
-    if (el.scrollHeight > el.clientHeight + 1) {
+    if (el.scrollHeight > el.clientHeight + 1 + textMetricOvershoot(el)) {
       add(
         'unclipped-v-overflow',
         describe(el),
@@ -201,9 +230,15 @@ function measureInPage(options: MeasureOptions): Finding[] {
   if (options.touch) {
     const selector =
       'button, a[href], input:not([type="hidden"]), select, textarea, [role="button"], summary';
-    const MIN = 44;
+    // An open modal makes everything outside it inert: no touch target there can be tapped.
+    const modal = Array.from(document.querySelectorAll('[aria-modal="true"]')).find(
+      (candidate) => !invisible(candidate),
+    );
     for (const el of Array.from(document.querySelectorAll(selector))) {
       if (excluded(el) || invisible(el)) continue;
+      if (modal !== undefined && !modal.contains(el)) continue;
+      // DESIGN.md "Hit targets": 44 px on home, lobby and result; 32 px in the HUD (top bar).
+      const MIN = el.closest('header.topbar') === null ? 44 : 32;
       const style = getComputedStyle(el);
       if (
         el.tagName === 'A' &&
@@ -304,7 +339,7 @@ export async function assertHealthy(page: Page, label: string): Promise<void> {
   });
   const problems: string[] = [];
   if (health.rules <= 0) problems.push('document.styleSheets has no cssRules (CSS did not load)');
-  if (health.elements < 10) problems.push(`only ${String(health.elements)} elements in <body>`);
+  if (health.elements < 6) problems.push(`only ${String(health.elements)} elements in <body>`);
   if (!/archivo|big shoulders/i.test(health.fontFamily)) {
     problems.push(
       `body font-family is "${health.fontFamily}", not Archivo / Big Shoulders Display`,

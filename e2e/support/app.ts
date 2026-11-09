@@ -62,7 +62,7 @@ export async function newPlayer(
  * A touch-only phone sees the keyboard-needed warning after Create / Join; a physical key press
  * proves a keyboard and continues. Desktop players skip this.
  */
-async function passKeyboardWarning(player: Player, onWarning?: WarningHook): Promise<void> {
+export async function passKeyboardWarning(player: Player, onWarning?: WarningHook): Promise<void> {
   if (!player.mobile) return;
   const { page } = player;
   await expect(page.getByTestId(TEST_IDS.keyboard.warning)).toBeVisible();

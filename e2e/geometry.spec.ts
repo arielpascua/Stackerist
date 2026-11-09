@@ -16,6 +16,7 @@ import {
   open,
   oppCanvas,
   ownCanvas,
+  passKeyboardWarning,
   resultCard,
   startMatch,
   TEST_IDS,
@@ -100,12 +101,16 @@ for (const profile of PROFILES) {
 
         await fillName(player.page, player.name);
         await player.page.getByTestId(TEST_IDS.home.joinButton).click();
+        const warning: Finding[] = [];
+        await passKeyboardWarning(player, async (page) => {
+          warning.push(...(await check(page, profile, 'keyboard-warning')));
+        });
         await expect(player.page.getByTestId(TEST_IDS.home.codeError)).toHaveText(
           COPY.errors.roomNotFound(wrong),
         );
         const error = await check(player.page, profile, 'join-error');
         expect(player.problems).toEqual([]);
-        expectClean([...join, ...error], `join @ ${profile.label}`);
+        expectClean([...join, ...warning, ...error], `join @ ${profile.label}`);
       } finally {
         await closeAll([player]);
       }
