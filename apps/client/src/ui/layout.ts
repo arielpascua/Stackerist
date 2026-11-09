@@ -28,12 +28,12 @@ export function legendIsShort(viewportWidth: number): boolean {
 export const HIT_MIN_PX = 44;
 
 /**
- * How far a control's hit area must reach past its box, per side along the height, so that it is
- * still at least `minPx` tall on screen after its container is scaled by `scale` (the result card
- * shrinks as a whole on small screens, which shrinks a 44 px button too). 0 when nothing is lost.
+ * The CSS height a control needs so that it is still `minPx` tall on screen after its container is
+ * scaled by `scale` (the result card shrinks as a whole on small screens, which shrinks a 44 px button
+ * too). Rounded up with one pixel of margin for sub-pixel hit testing. 0 when the container is not
+ * scaled down: nothing is lost, so the layout stays exactly as designed.
  */
-export function hitBleedPx(scale: number, boxHeightPx: number = HIT_MIN_PX, minPx = HIT_MIN_PX) {
-  if (!Number.isFinite(scale) || scale <= 0) return 0;
-  const needed = minPx / scale;
-  return Math.max(0, (needed - boxHeightPx) / 2);
+export function scaledHitMinPx(scale: number, minPx: number = HIT_MIN_PX): number {
+  if (!Number.isFinite(scale) || scale <= 0 || scale >= 1) return 0;
+  return Math.ceil(minPx / scale) + 1;
 }

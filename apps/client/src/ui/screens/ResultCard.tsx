@@ -10,7 +10,7 @@ import type { DrawBestMoment } from '../../game/contract.ts';
 import { Button } from '../components/common.tsx';
 import { COPY } from '../copy.ts';
 import { useFitScale } from '../hooks.ts';
-import { hitBleedPx } from '../layout.ts';
+import { scaledHitMinPx } from '../layout.ts';
 import type { BestMomentView, ResultView } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
 
@@ -102,7 +102,7 @@ export function ResultCard(props: ResultCardProps) {
           style={
             {
               '--result-scale': scale,
-              '--result-hit-bleed': `${String(hitBleedPx(scale))}px`,
+              '--result-hit-min': `${String(scaledHitMinPx(scale))}px`,
             } as CSSProperties
           }
           data-testid={TEST_IDS.result.card}

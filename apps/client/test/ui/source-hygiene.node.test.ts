@@ -73,10 +73,14 @@ describe('REQ-048 hit areas', () => {
     expect(tokens).toContain(`--hit-min: ${String(HIT_MIN_PX)}px;`);
   });
 
-  it('REQ-048 the lobby share link reaches the 44 px floor without moving layout', () => {
-    expect(pages).toMatch(/\.share-link::after\s*\{[^}]*position: absolute/);
-    // A 13 px / 1.45 line, 16 px reach above and the 12 px plate gap below.
-    expect(13 * 1.45 + 16 + 12).toBeGreaterThanOrEqual(HIT_MIN_PX);
+  it('REQ-048 the lobby share link is a real 44 px tall box (--hit-min), not a bleed', () => {
+    expect(pages).toMatch(/\.share-link\s*\{[^}]*min-height: var\(--hit-min\)/);
+  });
+
+  it('REQ-050 result card buttons take min-height from --result-hit-min (scale-aware) and --hit-min', () => {
+    const result = readFileSync(join(SRC, 'styles', 'result.css'), 'utf8');
+    expect(result).toMatch(/max\(var\(--hit-min\), var\(--result-hit-min, 0px\)\)/);
+    expect(result).toMatch(/max\(var\(--space-12\), var\(--result-hit-min, 0px\)\)/);
   });
 });
 
