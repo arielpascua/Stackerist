@@ -8,10 +8,21 @@
  *
  * Exclusions (all measured as such): anything inside <svg>; `.sr-only`, `[aria-hidden="true"]`,
  * `[hidden]` subtrees and sub-pixel boxes; invisible (display:none, visibility:hidden, opacity 0)
- * elements; inline links in running text (touch rule only). `[data-overlay]` roots are excluded from
+ * elements; inline links in running text (touch rule only); an inline `<bdi>` (next paragraph).
+ * `[data-overlay]` roots are excluded from
  * the sibling-overlap rule only (an overlay overlaps the board by design, architecture R12); the
  * overlay and everything in it is still held to the viewport (overlay-offscreen) and to the overflow
  * rules, so an overlay cannot spill off the screen.
+ *
+ * The `<bdi>` exclusion (security review F7: every player name is wrapped in one): a `<bdi>` whose
+ * computed display is `inline` is text flow, not a layout box. A name clipped by its parent
+ * (`overflow:hidden` + `text-overflow:ellipsis`, e.g. `.standoff__name`) has an inline box as wide as
+ * the whole unclipped text, which can reach past the viewport although nothing there is visible. So
+ * that bdi is neither a sibling-overlap participant, nor a touch target, nor held to overlay-offscreen,
+ * while its PARENT is measured in full by every rule. Only the element itself is excluded (never its
+ * descendants), and a `<bdi>` that is block, flex or inline-block is a real box, measured like any
+ * other (geometry-signature.spec.ts proves both halves: the probe still fires on the parent and on
+ * a non-inline bdi).
  *
  * Calibrations (each one documented where it is applied, none of them hides a real spill):
  * - unclipped-v-overflow excuses only the font's own content-area overshoot below the last line;
@@ -78,7 +89,13 @@ function measureInPage(options: MeasureOptions): Finding[] {
 
   const subPixel = (rect: DOMRect): boolean => rect.width < 1 || rect.height < 1;
 
+  // An inline <bdi> (every player name is wrapped in one, security review F7) is text flow, not a
+  // layout box: see the header. Only the element itself, only while its display is `inline`.
+  const inlineBdi = (el: Element): boolean =>
+    el.tagName === 'BDI' && getComputedStyle(el).display === 'inline';
+
   const excluded = (el: Element): boolean => {
+    if (inlineBdi(el)) return true;
     if (el.closest('svg') !== null) return true;
     if (el.closest('.sr-only') !== null) return true;
     if (el.closest('[aria-hidden="true"]') !== null) return true;
@@ -195,7 +212,7 @@ function measureInPage(options: MeasureOptions): Finding[] {
   // overlay-offscreen: an overlay and everything in it stays inside the viewport. Elements that are
   // aria-hidden are still held to this (it is a containment rule, not a text rule).
   for (const el of all) {
-    if (!inOverlay(el) || invisible(el)) continue;
+    if (!inOverlay(el) || invisible(el) || inlineBdi(el)) continue;
     if (el.closest('svg') !== null || el.closest('.sr-only') !== null) continue;
     if (el.closest('[hidden]') !== null) continue;
     const rect = el.getBoundingClientRect();

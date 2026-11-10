@@ -93,17 +93,22 @@ export async function readReport(page: Page): Promise<ReportRows> {
   return out;
 }
 
-/** The series bug as the player reads it: "Alice 1 – 0 Bob" (names and digits, collapsed). */
+/**
+ * The series bug as the player reads it: "Series Alice 1 – 0 Bob". The label, the two names and the
+ * digits are separate elements laid out by CSS (no whitespace between them in the DOM text), and each
+ * name sits inside its own `<bdi>` (bidirectional isolation, security review F7). So the text is read
+ * from the rendered text of every `p` / `span` that has no further `p` / `span` below it: a name's
+ * span contributes its `<bdi>` text (`textContent` includes descendants), the parts are
+ * whitespace-collapsed and joined with one space, the way the line reads on screen.
+ */
 export async function seriesBugText(page: Page): Promise<string> {
-  // The label, the two names and the digits are separate elements laid out by CSS (no whitespace
-  // between them in the DOM text), so they are joined here the way they read on screen.
   const parts = await page
     .getByTestId(TEST_IDS.result.seriesScore)
     .locator('p, span')
     .evaluateAll((nodes) =>
       nodes
-        .filter((node) => node.children.length === 0)
-        .map((node) => (node.textContent ?? '').trim()),
+        .filter((node) => node.querySelector('p, span') === null)
+        .map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim()),
     );
   return parts.join(' ');
 }

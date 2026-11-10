@@ -523,6 +523,85 @@ test.describe('probe can fail on the series card (gate 9d-ii)', () => {
     }
   });
 
+  test('390x844 standoff: the inline <bdi> exclusion is narrow (parent still measured, a non-inline bdi still measured)', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    // 16-character wide names: their inline bdi boxes (about 390 px) are what the exclusion is for.
+    // Reduced motion: the plates are at rest at once, so the three measurements fit the 3 s countdown.
+    const a = await newPlayer(browser, LONG_A, { viewport: MOBILE, mobile: true });
+    const b = await newPlayer(browser, LONG_B, {
+      viewport: MOBILE,
+      mobile: true,
+      reducedMotion: true,
+    });
+    try {
+      await startMatch(a, b);
+      const { page } = b;
+      const overlay = page.getByTestId(TEST_IDS.countdown.overlay);
+      await expect(overlay).toHaveAttribute('data-phase', /^[123]$/);
+      await expect(page.getByTestId(TEST_IDS.countdown.nameLeft)).toBeVisible();
+      await assertHealthy(page, 'standoff bdi probe baseline');
+      await settle(page);
+      const options: MeasureOptions = { touch: false, noPageScroll: false, mustFit: null };
+      const inlineBdis = await page.evaluate(
+        () =>
+          Array.from(document.querySelectorAll('[data-overlay] bdi')).filter(
+            (el) =>
+              getComputedStyle(el).display === 'inline' && el.getBoundingClientRect().right > 390,
+          ).length,
+      );
+      // The fixture really contains what the exclusion is about: inline bdi boxes wider than the screen.
+      expect(inlineBdis, 'inline bdi boxes reaching past 390 px in the overlay').toBeGreaterThan(0);
+      const baseline = await measure(page, options);
+      expect(baseline, formatFindings('standoff baseline', baseline)).toEqual([]);
+
+      const run = async (css: string): Promise<Finding[]> => {
+        const style = await page.addStyleTag({ content: css });
+        await frames(page);
+        const found = await measure(page, options);
+        await style.evaluate((node) => {
+          (node as Element).remove();
+        });
+        await frames(page);
+        return found;
+      };
+
+      // Bug 1: the left plate (the parent of the name and its bdi) is pushed 600 px to the right. The
+      // bdi is excluded, the plate and the name are not: the rule must still fire, and not on a bdi.
+      const parentMoved = await run(
+        `[data-testid="${TEST_IDS.countdown.plateLeft}"]{position:relative !important;left:600px !important}`,
+      );
+      // Bug 2: the same bdi boxes made inline-block are no longer text flow: a real box, 390 px wide.
+      const blockBdi = await run('[data-overlay] bdi{display:inline-block !important}');
+      const restored = await measure(page, options);
+      await expect(overlay).toHaveAttribute('data-phase', /^([123]|duel)$/);
+      console.log(
+        [
+          'PROBE-CAN-FAIL standoff 390x844 (inline bdi exclusion)',
+          `  inline bdi boxes wider than the screen in the fixture: ${String(inlineBdis)}`,
+          `  baseline            : ${summary(baseline)}`,
+          `  plate pushed right  : ${summary(parentMoved)}`,
+          `  bdi -> inline-block : ${summary(blockBdi)}`,
+          `  restored            : ${summary(restored)}`,
+        ].join('\n'),
+      );
+      const offscreen = (found: readonly Finding[]): Finding[] =>
+        found.filter((f) => f.check === 'overlay-offscreen');
+      expect(
+        offscreen(parentMoved).filter((f) => f.where !== 'bdi').length,
+        formatFindings('plate pushed right', parentMoved),
+      ).toBeGreaterThan(0);
+      expect(
+        offscreen(blockBdi).filter((f) => f.where.startsWith('bdi')).length,
+        formatFindings('bdi inline-block', blockBdi),
+      ).toBeGreaterThan(0);
+      expect(restored, formatFindings('standoff restored', restored)).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+
   test('390x844 series card: a shrunken New series button turns the touch rule red', async ({
     browser,
   }) => {
