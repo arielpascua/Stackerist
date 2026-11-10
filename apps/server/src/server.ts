@@ -14,7 +14,7 @@ import { clientIpConfigFromEnv, type ClientIpConfig } from './clientIp.js';
 import { realClock, type Clock } from './clock.js';
 import { CLOSE } from './codes.js';
 import { DEFAULT_LIMITS, resolvePort, type Limits } from './config.js';
-import { ConnectionHub } from './connection.js';
+import { ConnectionHub, isFrameError } from './connection.js';
 import { guardOrigin, registerHttp, respondToFrameworkError } from './http.js';
 import { createLogger, EventLog } from './log.js';
 import { GameLoop } from './loop.js';
@@ -116,7 +116,8 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
   await app.register(fastifyWebsocket, {
     options: { maxPayload: limits.wsHardMaxPayloadBytes },
     errorHandler: (error, socket) => {
-      log.error('handler.error', {}, error);
+      // A malformed frame is the sender's doing: the hub logs it as a coalesced warning, with no stack (F8).
+      if (!isFrameError(error)) log.error('handler.error', {}, error);
       socket.terminate();
     },
     preClose: (done) => {

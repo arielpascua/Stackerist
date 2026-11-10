@@ -142,6 +142,16 @@ export class Connection {
   }
 }
 
+/**
+ * A framing violation `ws` reported itself (oversized past the hard payload cap, invalid UTF-8, bad opcode,
+ * reserved bits…): every one carries a `WS_ERR_*` code. Hostile input, not a server fault.
+ */
+export function isFrameError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null || !('code' in err)) return false;
+  const { code } = err;
+  return typeof code === 'string' && code.startsWith('WS_ERR_');
+}
+
 function frameByteLength(data: RawData): number {
   if (Array.isArray(data)) return data.reduce((sum, part) => sum + part.length, 0);
   if (Buffer.isBuffer(data)) return data.length;
@@ -225,11 +235,18 @@ export class ConnectionHub {
         this.#onClose(conn, code);
       });
     });
-    socket.on('error', () => {
-      // The plugin's errorHandler logs and terminates; this only stops our side.
+    socket.on('error', (err: unknown) => {
+      // The plugin's errorHandler terminates (and logs anything that is not a frame error); this stops our
+      // side and records a frame the WebSocket layer refused as one coalesced warning (F8).
       safeCall(log, { conn: conn.id }, () => {
         conn.closing = true;
         conn.stopPing();
+        if (isFrameError(err)) {
+          log.anticheat(ERR.BAD_MESSAGE, {
+            conn: conn.id,
+            ...(conn.room === null ? {} : { room: conn.room.code }),
+          });
+        }
       });
     });
     this.#ping(conn);
