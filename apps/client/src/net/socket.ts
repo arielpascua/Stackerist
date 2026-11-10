@@ -13,13 +13,14 @@
 import {
   CLOSE_CODES,
   GRACE_MS,
+  RECOVERABLE_CLOSE_CODES,
   WS_PATH,
   parseServerMessage,
   type ClientMessage,
   type CloseCodeName,
   type ServerMessage,
 } from '@stackerist/protocol';
-import type { ConnectionStatus } from '../game/contract.ts';
+import type { ConnectionStatus, RecoverableCloseCode } from '../game/contract.ts';
 import type { Timers } from '../game/timers.ts';
 
 /**
@@ -46,6 +47,11 @@ const CLOSE_CODE_NAMES = Object.keys(CLOSE_CODES) as CloseCodeName[];
 /** The protocol name of a close code, or null for codes the protocol doesn't define (1000, 1006 …). */
 export function closeCodeName(code: number): CloseCodeName | null {
   return CLOSE_CODE_NAMES.find((name) => CLOSE_CODES[name] === code) ?? null;
+}
+
+/** The code itself when it is one the server sends that CLOSE_CODES does not name (4005, 1013), else null. */
+export function recoverableCloseCode(code: number): RecoverableCloseCode | null {
+  return Object.values(RECOVERABLE_CLOSE_CODES).find((known) => known === code) ?? null;
 }
 
 export function shouldReconnect(code: number): boolean {
@@ -84,6 +90,8 @@ export interface GameSocketEvents {
   /** Every successful (re)open. */
   onOpen(): void;
   onMessage(msg: ServerMessage): void;
+  /** Every close the server or network causes, with its code, just before the status changes. */
+  onDropped?(code: number): void;
   onStatus(status: ConnectionStatus, closedBy: CloseCodeName | null): void;
 }
 
@@ -173,6 +181,7 @@ export class GameSocket {
 
   #dropped(code: number): void {
     this.#conn = null;
+    this.#options.events.onDropped?.(code);
     const previous = this.#phase;
     if (!shouldReconnect(code)) {
       this.#phase = { kind: 'closed' };

@@ -1,3 +1,5 @@
+// Must come first: zod's JIT is switched off before the protocol builds its schemas (see the module).
+import './net/zodConfig.ts';
 import './styles/index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

@@ -9,11 +9,14 @@ import { ArenaPage, Button, Logo } from './common.tsx';
 
 export function ConnectionBanner({
   failed,
+  reason,
   onRetry,
   onHome,
 }: {
   /** false: still reconnecting. true: the retries ran out. */
   readonly failed: boolean;
+  /** Why it is reconnecting (a recoverable close), or null for the generic line. */
+  readonly reason: string | null;
   readonly onRetry: () => void;
   readonly onHome: () => void;
 }) {
@@ -25,7 +28,7 @@ export function ConnectionBanner({
       data-testid={TEST_IDS.banner.connection}
     >
       <p className="conn-banner__text">
-        {failed ? COPY.errors.cantReach : COPY.errors.connectionLost}
+        {failed ? COPY.errors.cantReach : (reason ?? COPY.errors.connectionLost)}
       </p>
       {failed ? (
         <div className="conn-banner__actions">

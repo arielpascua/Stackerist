@@ -130,11 +130,18 @@ export interface DisconnectOverlayProps {
   } | null;
   readonly spectator: boolean;
   readonly graceSeconds: number;
+  /** Own connection only: why it dropped (a recoverable close), instead of the generic line. */
+  readonly reason?: string | null;
 }
 
 const ANNOUNCE_AT = [10, 5] as const;
 
-export function DisconnectOverlay({ opponent, spectator, graceSeconds }: DisconnectOverlayProps) {
+export function DisconnectOverlay({
+  opponent,
+  spectator,
+  graceSeconds,
+  reason = null,
+}: DisconnectOverlayProps) {
   const timerRef = useRef<HTMLParagraphElement>(null);
   const liveRef = useRef<HTMLParagraphElement>(null);
   const name = opponent?.name ?? null;
@@ -178,7 +185,7 @@ export function DisconnectOverlay({ opponent, spectator, graceSeconds }: Disconn
               {COPY.disconnect.connectionLostTitle}
             </h2>
             <p className="small" role="status">
-              {COPY.disconnect.connectionLostLine(graceSeconds)}
+              {reason ?? COPY.disconnect.connectionLostLine(graceSeconds)}
             </p>
           </>
         ) : (

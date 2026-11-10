@@ -13,6 +13,7 @@ import { Button, Logo } from '../components/common.tsx';
 import { LeaveConfirm } from '../components/LeaveConfirm.tsx';
 import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
+import { reconnectNotice } from '../errors.ts';
 import { formatClock } from '../format.ts';
 import { useFitScale, useReducedMotion, useViewport } from '../hooks.ts';
 import { legendIsShort } from '../layout.ts';
@@ -203,7 +204,9 @@ export function Game(props: GameProps) {
   const score = room.series.score;
   const lostConnection = live && state.connection === 'reconnecting';
   const resuming = state.countdown?.kind === 'resume';
-  const paused = state.paused;
+  // Belt and braces for REQ-031: a result, or a gameOver the room status has not caught up with, ends
+  // the pause, so the disconnect overlay and its live region never sit under the result card.
+  const paused = result === null && state.result === null ? state.paused : null;
   const pausedName = paused !== null ? names[paused.seat] : null;
 
   const stageStyle = {
@@ -328,7 +331,12 @@ export function Game(props: GameProps) {
           kind={resuming ? 'resume' : 'start'}
         />
         {lostConnection ? (
-          <DisconnectOverlay opponent={null} spectator={spectator} graceSeconds={GRACE_MS / 1000} />
+          <DisconnectOverlay
+            opponent={null}
+            spectator={spectator}
+            graceSeconds={GRACE_MS / 1000}
+            reason={reconnectNotice(state)}
+          />
         ) : paused !== null && pausedName !== null && !resuming && paused.seat !== role ? (
           <DisconnectOverlay
             opponent={{

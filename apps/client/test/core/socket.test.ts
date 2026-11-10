@@ -1,6 +1,7 @@
 import {
   CLOSE_CODES,
   GRACE_MS,
+  RECOVERABLE_CLOSE_CODES,
   WS_PATH,
   type ClientMessage,
   type ServerMessage,
@@ -11,6 +12,7 @@ import {
   GameSocket,
   RECONNECT_BACKOFF_MS,
   closeCodeName,
+  recoverableCloseCode,
   reconnectDelayMs,
   shouldReconnect,
   wsUrl,
@@ -36,6 +38,7 @@ function harness() {
   const connections: FakeConnection[] = [];
   const messages: ServerMessage[] = [];
   const statuses: { status: ConnectionStatus; closedBy: string | null }[] = [];
+  const drops: number[] = [];
   let opens = 0;
   const socket = new GameSocket({
     url: 'ws://example.test/ws',
@@ -52,6 +55,7 @@ function harness() {
       },
       onMessage: (msg) => messages.push(msg),
       onStatus: (status, closedBy) => statuses.push({ status, closedBy }),
+      onDropped: (code) => drops.push(code),
     },
   });
   const last = (): FakeConnection => {
@@ -59,7 +63,7 @@ function harness() {
     if (conn === undefined) throw new Error('no connection');
     return conn;
   };
-  return { timers, connections, messages, statuses, socket, last, opens: () => opens };
+  return { timers, connections, messages, statuses, drops, socket, last, opens: () => opens };
 }
 
 describe('REQ-021 socket: URL, close policy and reconnect', () => {
@@ -76,6 +80,29 @@ describe('REQ-021 socket: URL, close policy and reconnect', () => {
     expect(closeCodeName(CLOSE_CODES.REPLACED)).toBe('REPLACED');
     expect(closeCodeName(CLOSE_CODES.PONG_TIMEOUT)).toBe('PONG_TIMEOUT');
     expect(closeCodeName(1006)).toBeNull();
+  });
+
+  it('REQ-021 4005 (slow consumer) and 1013 (try again later) are recoverable, not named close codes', () => {
+    expect(recoverableCloseCode(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER)).toBe(4005);
+    expect(recoverableCloseCode(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER)).toBe(1013);
+    expect(recoverableCloseCode(1006)).toBeNull();
+    expect(recoverableCloseCode(CLOSE_CODES.PONG_TIMEOUT)).toBeNull();
+    expect(closeCodeName(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER)).toBeNull();
+    expect(shouldReconnect(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER)).toBe(true);
+    expect(shouldReconnect(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER)).toBe(true);
+  });
+
+  it('REQ-021 every drop reports its close code before the reconnect status', () => {
+    const h = harness();
+    h.socket.connect();
+    h.last().handlers.onOpen();
+    h.last().handlers.onClose(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER);
+    expect(h.drops).toEqual([4005]);
+    expect(h.statuses.at(-1)?.status).toBe('reconnecting');
+    h.timers.advance(reconnectDelayMs(0));
+    expect(h.connections).toHaveLength(2);
+    h.last().handlers.onClose(1006);
+    expect(h.drops).toEqual([4005, 1006]);
   });
 
   it('REQ-021 reconnects after 1001, 1006 and 4003; never after 4000, 4001, 4002 or 4004', () => {
