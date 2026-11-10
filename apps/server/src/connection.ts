@@ -26,7 +26,7 @@ import {
   type ServerMessage,
 } from '@stackerist/protocol';
 import type { RawData, WebSocket } from 'ws';
-import { resolveClientIp, type ClientIpConfig } from './clientIp.js';
+import { resolveClientIpDetailed, type ClientIpConfig } from './clientIp.js';
 import type { Clock, TimerId } from './clock.js';
 import { CLOSE, ERR, ERROR_TEXT, type AnyCloseName } from './codes.js';
 import { IP_WINDOW_MS, REFUSED_SOCKET_GRACE_MS, type Limits } from './config.js';
@@ -179,6 +179,7 @@ export class ConnectionHub {
   /** Open sockets per client IP (F2); a refused socket is never counted. */
   readonly #socketsPerIp = new Map<string, number>();
   #nextId = 1;
+  #warnedHeaderMissing = false;
   #sweepTimer: TimerId | null = null;
 
   constructor(deps: HubDeps) {
@@ -193,7 +194,13 @@ export class ConnectionHub {
   /** Called synchronously from the WebSocket route: listeners are attached before returning. */
   accept(socket: WebSocket, req: UpgradeRequest): void {
     const { clock, log, clientIp, limits } = this.#deps;
-    const conn = new Connection(this.#nextId, socket, resolveClientIp(req, clientIp), clock, {
+    const resolved = resolveClientIpDetailed(req, clientIp);
+    if (!resolved.fromConfiguredSource && !this.#warnedHeaderMissing) {
+      // Once, with no address: a proxy that stopped sending the header makes everyone share one bucket.
+      this.#warnedHeaderMissing = true;
+      log.warn('clientip.header_missing');
+    }
+    const conn = new Connection(this.#nextId, socket, resolved.ip, clock, {
       maxBufferedBytes: limits.maxBufferedBytes,
       nonInputBurst: limits.nonInputBurst,
       nonInputRefillPerSec: limits.nonInputRefillPerSec,
@@ -418,7 +425,12 @@ export class ConnectionHub {
     room.addPlayer(conn, role, msg.name);
   }
 
-  /** rejoin: bound → full failed-join window → not found (charge) → token matches neither seat (charge) → R1. */
+  /**
+   * rejoin: bound → verify the token (constant time, both seats) → a match rejoins whatever the failed-join
+   * window says (the 128-bit token can't be guessed, and a family behind a noisy NAT must get back to its
+   * game, F3b) → a failure with the window full is TOO_MANY_JOINS and says no more → otherwise charge, then
+   * ROOM_NOT_FOUND or BAD_TOKEN. The charge comes before any state is written.
+   */
   #rejoin(conn: Connection, msg: RejoinMessage): void {
     const { clock, limits } = this.#deps;
     const now = clock.monotonicMs();
@@ -426,23 +438,19 @@ export class ConnectionHub {
       this.#reject(conn, ERR.ALREADY_IN_ROOM, ERR.ALREADY_IN_ROOM);
       return;
     }
+    const room = this.#lookup(msg.code);
+    const seat = room === null ? null : room.matchToken(msg.token);
+    if (room !== null && seat !== null) {
+      room.rejoin(conn, seat);
+      return;
+    }
     if (this.#failedJoins.isFull(conn.ip, limits.maxFailedJoinsPerIpPerMin, now)) {
       this.#reject(conn, ERR.TOO_MANY_JOINS, 'JOIN_LIMIT');
       return;
     }
-    const room = this.#lookup(msg.code);
-    if (room === null) {
-      this.#failedJoins.charge(conn.ip, now);
-      this.#reject(conn, ERR.ROOM_NOT_FOUND, ERR.ROOM_NOT_FOUND);
-      return;
-    }
-    const seat = room.matchToken(msg.token);
-    if (seat === null) {
-      this.#failedJoins.charge(conn.ip, now);
-      this.#reject(conn, ERR.BAD_TOKEN, ERR.BAD_TOKEN);
-      return;
-    }
-    room.rejoin(conn, seat);
+    this.#failedJoins.charge(conn.ip, now);
+    if (room === null) this.#reject(conn, ERR.ROOM_NOT_FOUND, ERR.ROOM_NOT_FOUND);
+    else this.#reject(conn, ERR.BAD_TOKEN, ERR.BAD_TOKEN);
   }
 
   /** input: unbound → spectator → not playing → Match.receiveInput (bucket first, §4.3 a–e). */
