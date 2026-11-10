@@ -46,6 +46,18 @@ async function placePieces(player: Player, count: number): Promise<void> {
   }
 }
 
+/**
+ * Hard-drops once and waits until the Pieces counter has gone up. For a running match where gravity can
+ * lock a piece of its own at any moment: `placePieces` insists on exactly one more and would fail then.
+ */
+async function placeAtLeastOne(player: Player): Promise<void> {
+  const start = await ownStat(player.page, COPY.game.pieces);
+  await player.page.keyboard.press('Space');
+  await expect
+    .poll(() => ownStat(player.page, COPY.game.pieces), { timeout: 10_000 })
+    .toBeGreaterThan(start);
+}
+
 /** One value from the OPPONENT's stats block, as a number. */
 async function oppStat(page: Page, label: string): Promise<number> {
   const value = page
@@ -169,9 +181,11 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       // A board worth restoring on each side.
       await placePieces(a, 2);
       await placePieces(b, 1);
-      const aBefore = await readBoards(a.page);
 
-      // A's connection drops without a Leave. The server notices through its own ping/pong (10 s).
+      // A's connection drops without a Leave. The server notices through its own ping/pong, so the
+      // match keeps running for up to 10 s after the drop and a falling piece can lock in that
+      // window. Nothing below compares against the state before the drop: the reference is the state
+      // at the `paused` message (the exact state the server froze).
       await a.context.setOffline(true);
       const overlay = b.page.getByTestId(TEST_IDS.disconnect.overlay);
       await expect(overlay).toBeVisible({ timeout: 30_000 });
@@ -192,6 +206,17 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       // The server's own words: seat A paused, a 20 s grace.
       const paused = framesB.ofType('paused').at(-1);
       expect(paused?.seat).toBe('A');
+      // The paused state in protocol terms: the last snapshot B received before `paused`. A lock always
+      // sends a snapshot at once, so the piece counts in it are exact.
+      const pausedAt = framesB.messages.findIndex((m) => m.type === 'paused');
+      const pausedSnapshot = framesB.messages
+        .slice(0, pausedAt)
+        .filter((m) => m.type === 'snapshot')
+        .at(-1);
+      expect(pausedSnapshot, 'B received a snapshot before `paused`').toBeDefined();
+      const pausedPieces = (seat: 'A' | 'B'): number =>
+        (pausedSnapshot?.players as Record<string, { stats: { piecesPlaced: number } }>)[seat].stats
+          .piecesPlaced;
       const graceMs = Number(paused?.graceEndsAt) - Number(paused?.serverNow);
       expect(graceMs).toBeGreaterThanOrEqual(19_900);
       expect(graceMs).toBeLessThanOrEqual(20_100);
@@ -209,28 +234,42 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       }
       await expect(overlay).toBeHidden();
 
-      // Same board state: B's two boards did not move; A's own board is what B showed of it, and A's
-      // view of B is what B showed of itself; A's stats are what they were before the drop.
+      // Same board state as at the `paused` message. Stats are exact (a lock always sends a snapshot):
+      // A's own stats are what B showed of A while paused, the piece counts are the ones the paused
+      // snapshot carried, and B's stats did not move either.
       const resumedB = await readBoards(b.page);
       const resumedA = await readBoards(a.page);
-      expect(resumedB).toEqual(pausedB);
-      expectSameBoard(resumedA.own, pausedB.opp, "A's board as B saw it paused");
-      expectSameBoard(pausedB.own, resumedA.opp, "B's board as A sees it resumed");
-      expect(resumedA.ownStats).toBe(aBefore.ownStats);
+      expect(resumedA.ownStats).toBe(pausedB.oppStats);
       expect(resumedA.oppStats).toBe(pausedB.ownStats);
-      expect(resumedB.oppStats).toBe(aBefore.ownStats);
+      expect(resumedB.ownStats).toBe(pausedB.ownStats);
+      expect(resumedB.oppStats).toBe(pausedB.oppStats);
+      expect(await ownStat(a.page, COPY.game.pieces), "A's pieces at resume").toBe(
+        pausedPieces('A'),
+      );
+      expect(await ownStat(b.page, COPY.game.pieces), "B's pieces at resume").toBe(
+        pausedPieces('B'),
+      );
 
       // The resume anchor continues the same tick count: no ticks lost or gained across the pause.
-      const messages = framesB.messages;
-      const pausedAt = messages.findIndex((m) => m.type === 'paused');
-      const lastSnapshot = messages
-        .slice(0, pausedAt)
-        .filter((m) => m.type === 'snapshot')
-        .at(-1);
       const resumed = framesB.ofType('resumed').at(-1);
       expect(resumed, 'B received `resumed`').toBeDefined();
-      expect(Number(resumed?.tick) - Number(lastSnapshot?.tick)).toBeGreaterThanOrEqual(0);
-      expect(Number(resumed?.tick) - Number(lastSnapshot?.tick)).toBeLessThanOrEqual(2);
+      const gapTicks = Number(resumed?.tick) - Number(pausedSnapshot?.tick);
+      expect(gapTicks).toBeGreaterThanOrEqual(0);
+      expect(gapTicks).toBeLessThanOrEqual(2);
+
+      // Snapshots go out every second tick, so the paused snapshot can be up to 2 ticks behind the
+      // freeze and gravity may have moved a falling piece one row in them (never the preview, the combo
+      // or the pending garbage). With no tick in between, B's two boards are identical to the paused ones.
+      const withoutActive = (hooks: CanvasHooks): CanvasHooks => ({
+        ...hooks,
+        [DATA_HOOKS.active]: null,
+      });
+      expect(withoutActive(resumedB.own)).toEqual(withoutActive(pausedB.own));
+      expect(withoutActive(resumedB.opp)).toEqual(withoutActive(pausedB.opp));
+      if (gapTicks === 0) expect(resumedB).toEqual(pausedB);
+      // Both screens were rebuilt from the same resume snapshot, so they agree exactly.
+      expectSameBoard(resumedA.own, resumedB.opp, "A's board, A's view against B's view");
+      expectSameBoard(resumedB.own, resumedA.opp, "B's board, B's view against A's view");
 
       // After the 3 s countdown both are live again and the game goes on from there.
       await waitUntilLive(a);
@@ -238,9 +277,11 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       await expect
         .poll(() => ownCanvas(a.page).getAttribute(DATA_HOOKS.active), { timeout: 10_000 })
         .not.toBe(resumedA.own[DATA_HOOKS.active]);
-      await placePieces(a, 1);
-      await placePieces(b, 1);
-      expect(await ownStat(a.page, COPY.game.pieces)).toBe(3);
+      // The match is running again, so a piece may also lock by gravity: "goes on" means each player
+      // can place another piece, not that the count is exactly one more.
+      await placeAtLeastOne(a);
+      await placeAtLeastOne(b);
+      expect(await ownStat(a.page, COPY.game.pieces)).toBeGreaterThan(pausedPieces('A'));
       await expect(resultCard(a.page)).toHaveCount(0);
       await expect(resultCard(b.page)).toHaveCount(0);
       expect(framesB.gameOvers()).toEqual([]);
