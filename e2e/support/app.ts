@@ -196,12 +196,49 @@ export async function hardDropUntilResult(
 
 export type Verdict = 'win' | 'lose' | 'draw';
 
-export async function verdictOf(page: Page): Promise<Verdict> {
+/** The two result cards: one round's verdict, or the series winner screen (REQ-084). */
+export type CardKind = 'round' | 'series';
+
+/** Who is looking and who they play: a series headline names the winner, so it needs both. */
+export interface Names {
+  readonly me: string;
+  readonly opponent: string;
+}
+
+export async function cardKind(page: Page): Promise<CardKind> {
+  const kind = await resultCard(page).getAttribute('data-kind');
+  if (kind !== 'round' && kind !== 'series') {
+    throw new Error(`unexpected card kind: ${String(kind)}`);
+  }
+  return kind;
+}
+
+/** The series headline as the UI words it for `winner`: with or without the rounds score. */
+export function seriesHeadlines(winner: string): readonly string[] {
+  return [
+    COPY.result.series.headline(winner, null),
+    COPY.result.series.headline(winner, { won: 2, lost: 0 }),
+    COPY.result.series.headline(winner, { won: 2, lost: 1 }),
+  ];
+}
+
+/**
+ * What this player's result card says: "You win" / "You lose" / "Draw" on a round card, and on the
+ * series winner card the winner's name ("Bob wins the series"), which `names` turns into win / lose.
+ * Throws on any other headline, so a wrong or empty card never passes as a verdict.
+ */
+export async function verdictOf(page: Page, names?: Names): Promise<Verdict> {
   const text = ((await page.getByTestId(TEST_IDS.result.headline).textContent()) ?? '').trim();
-  if (text === COPY.result.youWin) return 'win';
-  if (text === COPY.result.youLose) return 'lose';
-  if (text === COPY.result.draw) return 'draw';
-  throw new Error(`unexpected result headline: ${JSON.stringify(text)}`);
+  if ((await cardKind(page)) === 'round') {
+    if (text === COPY.result.youWin) return 'win';
+    if (text === COPY.result.youLose) return 'lose';
+    if (text === COPY.result.draw) return 'draw';
+    throw new Error(`unexpected round headline: ${JSON.stringify(text)}`);
+  }
+  if (names === undefined) throw new Error('a series card names its winner: pass { me, opponent }');
+  if (seriesHeadlines(names.me).includes(text)) return 'win';
+  if (seriesHeadlines(names.opponent).includes(text)) return 'lose';
+  throw new Error(`unexpected series headline: ${JSON.stringify(text)}`);
 }
 
 /** The "Lines" cell of this player's own column in the stats table. */

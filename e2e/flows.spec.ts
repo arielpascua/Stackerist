@@ -87,8 +87,28 @@ test.describe('REQ-030 explicit leave', () => {
 
       // B: the result card at once, with the leave reason, and the series is theirs.
       await expect(resultCard(b.page)).toBeVisible({ timeout: 5_000 });
-      expect(await verdictOf(b.page)).toBe('win');
-      await expect(b.page.getByTestId(TEST_IDS.result.reason)).toHaveText(COPY.result.left(a.name));
+      // A forfeit ends the series, so B is shown the series winner card (not a round verdict): the
+      // winner's name in the headline, the leave reason, the 0 – 0 score, and the series is over.
+      await expect(resultCard(b.page)).toHaveAttribute('data-kind', 'series');
+      expect(await verdictOf(b.page, { me: b.name, opponent: a.name })).toBe('win');
+      await expect(b.page.getByTestId(TEST_IDS.result.headline)).toHaveText(
+        COPY.result.series.headline(b.name, null),
+      );
+      await expect(b.page.getByTestId(TEST_IDS.result.finalLabel)).toHaveText(
+        COPY.result.series.final,
+      );
+      await expect(b.page.getByTestId(TEST_IDS.result.reason)).toHaveText(
+        COPY.result.series.opponentLeftYours(a.name),
+      );
+      const score = b.page.getByTestId(TEST_IDS.result.seriesScore);
+      await expect(score).toContainText(a.name);
+      await expect(score).toContainText(b.name);
+      await expect(score).toContainText('0 – 0');
+      // Series over: New series is the action (never Next round); A has left, so it cannot be pressed.
+      const primary = b.page.getByTestId(TEST_IDS.result.primaryButton);
+      await expect(primary).toHaveText(COPY.result.newSeries);
+      await expect(b.page.getByRole('button', { name: COPY.result.nextRound })).toHaveCount(0);
+      await expect(primary).toBeDisabled();
       await expect(b.page.getByTestId(TEST_IDS.result.status)).toHaveText(COPY.result.opponentLeft);
       await expect.poll(() => framesB.gameOvers().length, { timeout: 5_000 }).toBe(1);
       const over = framesB.gameOvers()[0];
@@ -251,9 +271,9 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
       });
       // 20 s of grace after the server noticed, with a little slack.
       await expect(resultCard(b.page)).toBeVisible({ timeout: 35_000 });
-      expect(await verdictOf(b.page)).toBe('win');
+      expect(await verdictOf(b.page, { me: b.name, opponent: a.name })).toBe('win');
       await expect(b.page.getByTestId(TEST_IDS.result.reason)).toHaveText(
-        COPY.result.didntReconnect(a.name),
+        COPY.result.series.opponentDisconnectedYours(a.name),
       );
       // DEFECT (QA pass 2, owner apps/client/src/game/store.ts `gameOver` case + ui DisconnectOverlay):
       // the store keeps `paused` after `gameOver`, so the "Alice disconnected ... 0 s" overlay stays in the
