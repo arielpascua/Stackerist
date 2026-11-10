@@ -3,7 +3,6 @@
  * `/` leads with Create game; `/g/:code` pre-fills the code, focuses the name and leads with Join game.
  */
 import type { RoomCode } from '@stackerist/protocol';
-import { NAME_MAX_LENGTH } from '@stackerist/protocol';
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { ArenaPage, Button, Logo } from '../components/common.tsx';
 import { COPY } from '../copy.ts';
@@ -11,6 +10,9 @@ import type { KeyboardProof } from '../device.ts';
 import type { ErrorPresentation } from '../errors.ts';
 import {
   NAME_INPUT_MAX_UNITS,
+  nameErrorText,
+  nameProblem,
+  type NameProblem,
   parseRoomCodeInput,
   sanitizeCodeInput,
   validateName,
@@ -42,7 +44,7 @@ export function Home(props: HomeProps) {
   const { mode, busy, error, onCreate, onJoin, onWatch, keyboard } = props;
   const [name, setName] = useState('');
   const [code, setCode] = useState(() => sanitizeCodeInput(props.initialCode));
-  const [nameInvalid, setNameInvalid] = useState(false);
+  const [nameIssue, setNameIssue] = useState<NameProblem | null>(null);
   const [codeInvalid, setCodeInvalid] = useState(false);
   const [warning, setWarning] = useState<Pending | null>(null);
   const [lastAction, setLastAction] = useState<'create' | 'join'>(mode);
@@ -82,7 +84,7 @@ export function Home(props: HomeProps) {
     setLastAction('create');
     const validName = validateName(name);
     setCodeInvalid(false);
-    setNameInvalid(validName === null);
+    setNameIssue(nameProblem(name));
     if (validName === null) {
       nameRef.current?.focus();
       return;
@@ -99,7 +101,7 @@ export function Home(props: HomeProps) {
     setLastAction('join');
     const validName = validateName(name);
     const roomCode = parseRoomCodeInput(code);
-    setNameInvalid(validName === null);
+    setNameIssue(nameProblem(name));
     setCodeInvalid(roomCode === null);
     if (validName === null) {
       nameRef.current?.focus();
@@ -151,7 +153,7 @@ export function Home(props: HomeProps) {
         value={name}
         onChange={(event) => {
           setName(event.target.value);
-          if (nameInvalid) setNameInvalid(false);
+          if (nameIssue !== null) setNameIssue(null);
         }}
         autoComplete="nickname"
         autoCapitalize="words"
@@ -159,18 +161,18 @@ export function Home(props: HomeProps) {
         maxLength={NAME_INPUT_MAX_UNITS}
         readOnly={locked}
         aria-disabled={locked ? true : undefined}
-        aria-invalid={nameInvalid ? true : undefined}
-        aria-describedby={nameInvalid ? ids.nameError : undefined}
+        aria-invalid={nameIssue !== null ? true : undefined}
+        aria-describedby={nameIssue !== null ? ids.nameError : undefined}
         data-testid={TEST_IDS.home.nameInput}
       />
-      {nameInvalid ? (
+      {nameIssue !== null ? (
         <p
           id={ids.nameError}
           className="field-error"
           role="alert"
           data-testid={TEST_IDS.home.nameError}
         >
-          {COPY.errors.nameInvalid(NAME_MAX_LENGTH)}
+          {nameErrorText(nameIssue)}
         </p>
       ) : null}
     </div>

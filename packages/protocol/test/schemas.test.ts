@@ -474,9 +474,11 @@ describe('REQ-039 frame limit and schema-level rejection', () => {
     );
     // Worst cases: 16 control characters (6 bytes each once JSON-escaped) in the code, or 16 astral
     // characters (4 UTF-8 bytes each) in both the name and the code. A name can no longer hold a
-    // control character (F7), so its worst case is always the astral one.
-    for (const char of ['\u0001', '\u{1F600}']) {
-      const worst = { type: 'join', code: char.repeat(16), name: '\u{1F600}'.repeat(16) };
+    // control character (F7) or an emoji (REQ-044), so its worst case is 16 astral letters: CJK
+    // Extension B ideographs, 4 UTF-8 bytes each.
+    const astralLetter = String.fromCodePoint(0x20000);
+    for (const char of ['\u0001', astralLetter]) {
+      const worst = { type: 'join', code: char.repeat(16), name: astralLetter.repeat(16) };
       const text = JSON.stringify({ ...worst, asSpectator: false });
       expect(parseClientMessage(text).ok).toBe(true);
       expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(MAX_FRAME_BYTES / 2);
@@ -605,11 +607,11 @@ describe('REQ-044 names are trimmed, then 1..16 characters', () => {
     expect(CreateMessageSchema.safeParse({ type: 'create', name: '   ' }).success).toBe(false);
   });
 
-  it('REQ-044 length is in Unicode code points: 16 emoji pass, 17 do not', () => {
-    const emoji = '\u{1F600}';
-    expect(emoji).toHaveLength(2); // two UTF-16 code units, one code point
-    expect(NameSchema.parse(emoji.repeat(NAME_MAX_LENGTH))).toBe(emoji.repeat(NAME_MAX_LENGTH));
-    expect(NameSchema.safeParse(emoji.repeat(NAME_MAX_LENGTH + 1)).success).toBe(false);
+  it('REQ-044 length is in Unicode code points: 16 astral letters pass, 17 do not', () => {
+    const letter = String.fromCodePoint(0x20000); // CJK Extension B ideograph: a letter, not an emoji
+    expect(letter).toHaveLength(2); // two UTF-16 code units, one code point
+    expect(NameSchema.parse(letter.repeat(NAME_MAX_LENGTH))).toBe(letter.repeat(NAME_MAX_LENGTH));
+    expect(NameSchema.safeParse(letter.repeat(NAME_MAX_LENGTH + 1)).success).toBe(false);
     expect(NameSchema.safeParse(`${'x'.repeat(NAME_MAX_LENGTH)}\u0000`).success).toBe(false);
   });
 

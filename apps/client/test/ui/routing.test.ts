@@ -92,11 +92,12 @@ describe('REQ-044 names: trimmed, 1–16 code points, validated only by NameSche
     expect(validateName('x'.repeat(NAME_MAX_LENGTH + 1))).toBeNull();
   });
 
-  it('REQ-044 counts code points, so 16 emoji are a valid name and the input cap lets them in', () => {
-    const sixteen = '🟨'.repeat(NAME_MAX_LENGTH);
+  it('REQ-044 counts code points, so 16 astral letters are a valid name and the input cap lets them in', () => {
+    const letter = String.fromCodePoint(0x20000); // CJK Extension B ideograph: a letter, 2 UTF-16 units
+    const sixteen = letter.repeat(NAME_MAX_LENGTH);
     expect(validateName(sixteen)).toBe(sixteen);
-    expect(validateName('🟨'.repeat(NAME_MAX_LENGTH + 1))).toBeNull();
-    // Each of these emoji is two UTF-16 units; the field's hard cap must not cut a valid name.
+    expect(validateName(letter.repeat(NAME_MAX_LENGTH + 1))).toBeNull();
+    // Each of these letters is two UTF-16 units; the field's hard cap must not cut a valid name.
     expect(sixteen.length).toBeLessThanOrEqual(NAME_INPUT_MAX_UNITS);
   });
 

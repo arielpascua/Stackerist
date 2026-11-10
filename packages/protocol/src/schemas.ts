@@ -83,16 +83,39 @@ export const RoomCodeInputSchema = z.string().min(1).max(ROOM_CODE_INPUT_MAX_LEN
  * What a name may not contain (security review F7): control characters (Unicode Cc: NUL, newline, tab,
  * DEL, C1), format characters (Cf: zero-width, bidirectional overrides and isolates, marks, BOM, soft
  * hyphen, tags) and the line and paragraph separators. The two separators are added from their code
- * points so no invisible character sits in this file. A consequence: an emoji joined with a zero-width
- * joiner (a family, a profession) is refused; single emoji and variation-selector hearts are fine.
+ * points so no invisible character sits in this file. Emoji are refused separately (NAME_EMOJI_PATTERN).
  */
 const FORBIDDEN_NAME_CHARS = new RegExp(
   `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
   'u',
 );
 /**
+ * Emoji a name may not contain (REQ-044; owner decision 2026-11-10: "refuse emoji for better name
+ * readability"): every Extended_Pictographic character, regional indicators (flags), emoji modifiers
+ * (skin tones), the variation selectors U+FE0E and U+FE0F, and the combining enclosing keycap U+20E3.
+ * Joined sequences (a family, an astronaut) are already refused through the zero-width joiner, a
+ * format character. The digits and the keycap bases `#` and `*` are not pictographic, so they stay
+ * allowed. Known, accepted side effect: text-style symbols that Unicode also marks as pictographic
+ * (the copyright, registered and trade mark signs, a star, a heart, a smiley) are refused too.
+ * Built from property escapes and code points so no emoji sits in this file. Not global (`g`), so
+ * `.test` is stateless and safe to share with the client.
+ */
+export const NAME_EMOJI_PATTERN = new RegExp(
+  `[\\p{Extended_Pictographic}\\p{Regional_Indicator}\\p{Emoji_Modifier}${String.fromCodePoint(
+    0xfe0e,
+    0xfe0f,
+    0x20e3,
+  )}]`,
+  'u',
+);
+/** True when the text holds an emoji or pictographic symbol that `NameSchema` refuses (REQ-044). */
+export function nameHasEmoji(text: string): boolean {
+  return NAME_EMOJI_PATTERN.test(text);
+}
+/**
  * Player name (REQ-044): trimmed first, then NAME_MIN_LENGTH..NAME_MAX_LENGTH Unicode code points
- * (zod 4.6 counts a surrogate pair once). The one name validator: the UI uses it too.
+ * (zod 4.6 counts a surrogate pair once), with no control, format or bidirectional character and no
+ * emoji. The one name validator: the UI uses it too.
  */
 export const NameSchema = z
   .string()
@@ -101,6 +124,9 @@ export const NameSchema = z
   .max(NAME_MAX_LENGTH)
   .refine((name) => !FORBIDDEN_NAME_CHARS.test(name), {
     message: 'A name is visible text: no control, format or bidirectional characters',
+  })
+  .refine((name) => !NAME_EMOJI_PATTERN.test(name), {
+    message: 'A name has no emoji or special symbols: use letters, numbers and punctuation',
   });
 /** Seat token: SEAT_TOKEN_LENGTH base64url characters, no padding (128-bit). */
 export const SeatTokenSchema = z
