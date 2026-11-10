@@ -41,3 +41,6 @@ Thumbs.db
 .claude/skills/impeccable/scripts/bin/
 # impeccable agent definitions (not used by this repo)
 .claude/agents/
+
+# cdt temp files
+.claude/.TASK_BRIEF.md.tmp-*

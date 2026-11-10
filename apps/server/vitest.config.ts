@@ -11,5 +11,10 @@ export default defineConfig({
     name: 'server',
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    // These tests open real WebSockets and run in parallel files. Each one takes ~0.25 s alone, but the default
+    // 5 s limit flakes when the machine is busy (full suite, browsers, other agents). A longer limit, set once,
+    // is the fix; retries would hide real slowness. Individual tests keep their own, shorter, assertions.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
   },
 });

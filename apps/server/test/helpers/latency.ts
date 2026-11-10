@@ -565,8 +565,14 @@ export async function runDuel(options: DuelOptions): Promise<DuelRun> {
   const attacking = options.attackDelayTicks !== undefined;
   const h = await startTestServer({
     test: { startTick },
-    // B's two-line clear needs ~20 inputs inside a few ticks; the default bucket (20 + 30/s) would drop them.
-    ...(attacking ? { limits: { inputBurst: 400, inputRefillPerSec: 400 } } : {}),
+    // The link barrier (`LatencyLink.flush`) sends `rematch` as a sentinel every few simulated ticks, far
+    // faster than the per-connection non-input bucket (F9: burst 20, 5/s) allows on a virtual clock. F9 has
+    // its own tests (nonInput.test.ts); lift it here so this harness isolates prediction, not that limit.
+    limits: {
+      nonInputBurst: 100_000,
+      // B's two-line clear needs ~20 inputs inside a few ticks; the default bucket (20 + 30/s) would drop them.
+      ...(attacking ? { inputBurst: 400, inputRefillPerSec: 400 } : {}),
+    },
   });
   try {
     return await playDuel(h, options, startTick);
