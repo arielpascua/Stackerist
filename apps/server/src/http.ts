@@ -40,8 +40,14 @@ export const CSP_DIRECTIVES = [
   "form-action 'self'",
 ] as const;
 
-/** A host[:port] we are willing to copy into a header: letters, digits, dots, hyphens, [v6], a port. */
-const SAFE_HOST = /^(?:[a-z0-9-]+(?:.[a-z0-9-]+)*|[[0-9a-f:.]+])(?::d{1,5})?$/i;
+/**
+ * A host[:port] we are willing to copy into a header: dot-separated labels of 1..63 letters, digits and
+ * hyphens (at most 253 characters before the port), or a bracketed IPv6 literal, then an optional
+ * 1..5 digit port. Anchored; every quantifier is bounded and labels are separated by a mandatory dot,
+ * so a hostile value is rejected in linear time (no nested-quantifier backtracking).
+ */
+const SAFE_HOST =
+  /^(?:(?=[a-z0-9.-]{1,253}(?::|$))[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})*|\[[0-9a-f:.]{2,45}\])(?::\d{1,5})?$/i;
 
 /**
  * `inlineStyles` adds `'unsafe-inline'` to style-src only. The built client doesn't need it (React's
