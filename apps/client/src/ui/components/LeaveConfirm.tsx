@@ -6,6 +6,7 @@
 import { type KeyboardEvent, useEffect, useId, useRef } from 'react';
 import { COPY } from '../copy.ts';
 import { TEST_IDS } from '../testIds.ts';
+import { withNames } from './Bdi.tsx';
 import { Button } from './common.tsx';
 
 export interface LeaveConfirmProps {
@@ -47,7 +48,7 @@ export function LeaveConfirm({ opponent, onKeep, onLeave }: LeaveConfirmProps) {
       data-testid={TEST_IDS.leaveConfirm.dialog}
     >
       <p id={questionId} className="popover__question">
-        {COPY.leaveConfirm.question(opponent)}
+        {withNames(COPY.leaveConfirm.question(opponent), [opponent])}
       </p>
       <div className="popover__actions">
         <Button

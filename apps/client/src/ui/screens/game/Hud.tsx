@@ -7,6 +7,7 @@ import { SERIES_WINS_NEEDED } from '@stackerist/protocol';
 import type { Ref } from 'react';
 import { pingQuality } from '../../../../../../design/tokens/tokens.ts';
 import type { HudSide } from '../../../game/contract.ts';
+import { Bdi } from '../../components/Bdi.tsx';
 import { COPY } from '../../copy.ts';
 import { TEST_IDS } from '../../testIds.ts';
 
@@ -110,7 +111,7 @@ export function PlayerColumn({
     <section className={`player-col player-col--${kind}`} aria-label={name}>
       <div className="nameplate">
         <span className="nameplate__name" title={name} data-testid={ids.name}>
-          {name}
+          <Bdi>{name}</Bdi>
         </span>
         {props.roleLabel !== null ? <span className="label">{props.roleLabel}</span> : null}
         <Pips name={name} won={props.won} size={kind} testId={ids.pips} />

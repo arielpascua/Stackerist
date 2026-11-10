@@ -161,7 +161,7 @@ describe('REQ-084 series winner screen: "ARIEL WINS THE SERIES 2–1", per-round
     const html = render(view);
     expect(html).not.toContain(TEST_IDS.result.statsTable);
     expect(html).not.toContain(TEST_IDS.result.chart);
-    expect(html).toContain('Sam left, so the series is yours.');
+    expect(html.replace(/<\/?bdi>/g, '')).toContain('Sam left, so the series is yours.'); // names sit in <bdi>
   });
 
   it('REQ-084 the assertive summary reads the verdict once', () => {

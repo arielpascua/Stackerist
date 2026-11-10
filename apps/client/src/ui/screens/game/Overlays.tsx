@@ -4,6 +4,7 @@
  * - the disconnect overlay with its live seconds timer (REQ-050, REQ-031).
  */
 import { type Ref, useLayoutEffect, useRef } from 'react';
+import { Bdi, withNames } from '../../components/Bdi.tsx';
 import { COPY } from '../../copy.ts';
 import { secondsLeft } from '../../format.ts';
 import { TEST_IDS } from '../../testIds.ts';
@@ -45,7 +46,7 @@ function StandoffPlate({
     <p className={`standoff__plate standoff__plate--${side}`} data-testid={plateId}>
       <span className="onair-skew standoff__skew">
         <span className="standoff__name" title={player.name} data-testid={nameId}>
-          {player.name}
+          <Bdi>{player.name}</Bdi>
         </span>
         <Pips name={player.name} won={player.won} size="own" testId={pipsId} />
       </span>
@@ -183,7 +184,7 @@ export function DisconnectOverlay({ opponent, spectator, graceSeconds }: Disconn
         ) : (
           <>
             <h2 className="overlay-title" data-testid={TEST_IDS.disconnect.title}>
-              {COPY.disconnect.title(opponent.name)}
+              {withNames(COPY.disconnect.title(opponent.name), [opponent.name])}
             </h2>
             <p
               ref={timerRef}
@@ -192,12 +193,17 @@ export function DisconnectOverlay({ opponent, spectator, graceSeconds }: Disconn
               data-testid={TEST_IDS.disconnect.timer}
             />
             <p className="small">
-              {spectator
-                ? COPY.disconnect.waitingSpectator(opponent.name)
-                : COPY.disconnect.waitingPlayer(opponent.name)}
+              {withNames(
+                spectator
+                  ? COPY.disconnect.waitingSpectator(opponent.name)
+                  : COPY.disconnect.waitingPlayer(opponent.name),
+                [opponent.name],
+              )}
             </p>
             <p className="table-text muted">
-              {COPY.disconnect.pausesLeft(opponent.name, opponent.pausesLeft)}
+              {withNames(COPY.disconnect.pausesLeft(opponent.name, opponent.pausesLeft), [
+                opponent.name,
+              ])}
             </p>
             <p ref={liveRef} className="sr-only" role="status" />
           </>

@@ -41,6 +41,7 @@ import {
   createArb,
   deepKeys,
   joinArb,
+  forbiddenNameChars,
   nameArb,
   serverMessageArb,
 } from './arbitraries.js';
@@ -471,10 +472,11 @@ describe('REQ-039 frame limit and schema-level rejection', () => {
       }),
       { numRuns: 500 },
     );
-    // Worst cases: 16 control characters (6 bytes each once JSON-escaped) or 16 astral characters
-    // (4 UTF-8 bytes each) in both the name and the code.
+    // Worst cases: 16 control characters (6 bytes each once JSON-escaped) in the code, or 16 astral
+    // characters (4 UTF-8 bytes each) in both the name and the code. A name can no longer hold a
+    // control character (F7), so its worst case is always the astral one.
     for (const char of ['\u0001', '\u{1F600}']) {
-      const worst = { type: 'join', code: char.repeat(16), name: char.repeat(16) };
+      const worst = { type: 'join', code: char.repeat(16), name: '\u{1F600}'.repeat(16) };
       const text = JSON.stringify({ ...worst, asSpectator: false });
       expect(parseClientMessage(text).ok).toBe(true);
       expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(MAX_FRAME_BYTES / 2);
@@ -611,7 +613,8 @@ describe('REQ-044 names are trimmed, then 1..16 characters', () => {
     expect(NameSchema.safeParse(`${'x'.repeat(NAME_MAX_LENGTH)}\u0000`).success).toBe(false);
   });
 
-  it('REQ-044 any string is accepted iff its trimmed length is 1..16, and comes out trimmed', () => {
+  it('REQ-044 F7 any string is accepted iff its trimmed length is 1..16 and it has no control/format character, and comes out trimmed', () => {
+    const hasForbidden = new RegExp(forbiddenNameChars.source, 'u');
     fc.assert(
       fc.property(
         fc.oneof(
@@ -623,7 +626,9 @@ describe('REQ-044 names are trimmed, then 1..16 characters', () => {
           const result = NameSchema.safeParse(raw);
           const length = codePoints(raw.trim());
           const trimmed = raw.trim();
-          expect(result.success).toBe(length >= 1 && length <= NAME_MAX_LENGTH);
+          expect(result.success).toBe(
+            length >= 1 && length <= NAME_MAX_LENGTH && !hasForbidden.test(trimmed),
+          );
           if (result.success) {
             expect(result.data).toBe(trimmed);
           }
