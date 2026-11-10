@@ -33,10 +33,23 @@ export interface PlayerOptions {
   readonly viewport?: { readonly width: number; readonly height: number };
   /** Emulate a touch phone (isMobile + hasTouch). */
   readonly mobile?: boolean;
+  /** `prefers-reduced-motion: reduce` for this player. */
+  readonly reducedMotion?: boolean;
 }
 
 export const DESKTOP = { width: 1280, height: 600 } as const;
 export const MOBILE = { width: 390, height: 844 } as const;
+
+/**
+ * Every context gets its own client address (the server runs with CLIENT_IP_SOURCE=x-real-ip, see
+ * playwright.config.ts), because the server rate-limits creates per client IP (REQ-081: 10 a minute) and a
+ * suite that opens dozens of rooms from one address would trip its own limiter and fail at random.
+ */
+let clientCounter = Math.floor(Math.random() * 60_000);
+function nextClientIp(): string {
+  clientCounter = (clientCounter + 1) % 65_536;
+  return `10.${String(1 + (clientCounter >> 8))}.${String(clientCounter & 255)}.${String(1 + (clientCounter % 250))}`;
+}
 
 export async function newPlayer(
   browser: Browser,
@@ -45,6 +58,8 @@ export async function newPlayer(
 ): Promise<Player> {
   const context = await browser.newContext({
     viewport: options.viewport ?? DESKTOP,
+    extraHTTPHeaders: { 'x-real-ip': nextClientIp() },
+    ...(options.reducedMotion === true ? { reducedMotion: 'reduce' as const } : {}),
     ...(options.mobile === true
       ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
       : { deviceScaleFactor: 1 }),
@@ -196,12 +211,49 @@ export async function hardDropUntilResult(
 
 export type Verdict = 'win' | 'lose' | 'draw';
 
-export async function verdictOf(page: Page): Promise<Verdict> {
+/** The two result cards: one round's verdict, or the series winner screen (REQ-084). */
+export type CardKind = 'round' | 'series';
+
+/** Who is looking and who they play: a series headline names the winner, so it needs both. */
+export interface Names {
+  readonly me: string;
+  readonly opponent: string;
+}
+
+export async function cardKind(page: Page): Promise<CardKind> {
+  const kind = await resultCard(page).getAttribute('data-kind');
+  if (kind !== 'round' && kind !== 'series') {
+    throw new Error(`unexpected card kind: ${String(kind)}`);
+  }
+  return kind;
+}
+
+/** The series headline as the UI words it for `winner`: with or without the rounds score. */
+export function seriesHeadlines(winner: string): readonly string[] {
+  return [
+    COPY.result.series.headline(winner, null),
+    COPY.result.series.headline(winner, { won: 2, lost: 0 }),
+    COPY.result.series.headline(winner, { won: 2, lost: 1 }),
+  ];
+}
+
+/**
+ * What this player's result card says: "You win" / "You lose" / "Draw" on a round card, and on the
+ * series winner card the winner's name ("Bob wins the series"), which `names` turns into win / lose.
+ * Throws on any other headline, so a wrong or empty card never passes as a verdict.
+ */
+export async function verdictOf(page: Page, names?: Names): Promise<Verdict> {
   const text = ((await page.getByTestId(TEST_IDS.result.headline).textContent()) ?? '').trim();
-  if (text === COPY.result.youWin) return 'win';
-  if (text === COPY.result.youLose) return 'lose';
-  if (text === COPY.result.draw) return 'draw';
-  throw new Error(`unexpected result headline: ${JSON.stringify(text)}`);
+  if ((await cardKind(page)) === 'round') {
+    if (text === COPY.result.youWin) return 'win';
+    if (text === COPY.result.youLose) return 'lose';
+    if (text === COPY.result.draw) return 'draw';
+    throw new Error(`unexpected round headline: ${JSON.stringify(text)}`);
+  }
+  if (names === undefined) throw new Error('a series card names its winner: pass { me, opponent }');
+  if (seriesHeadlines(names.me).includes(text)) return 'win';
+  if (seriesHeadlines(names.opponent).includes(text)) return 'lose';
+  throw new Error(`unexpected series headline: ${JSON.stringify(text)}`);
 }
 
 /** The "Lines" cell of this player's own column in the stats table. */

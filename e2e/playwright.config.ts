@@ -38,7 +38,9 @@ export default defineConfig({
     command: 'node apps/server/dist/index.js',
     cwd: repoRoot,
     url: `${baseURL}/healthz`,
-    env: { PORT: String(port), HOST: '127.0.0.1' },
+    // CLIENT_IP_SOURCE=x-real-ip is the production setting (Railway); each test context sends its own
+    // x-real-ip, so the per-IP create limit (10 a minute) is not shared by the whole suite.
+    env: { PORT: String(port), HOST: '127.0.0.1', CLIENT_IP_SOURCE: 'x-real-ip' },
     reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'pipe',
