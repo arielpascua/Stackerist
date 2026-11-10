@@ -128,11 +128,21 @@ export const seatTokenArb = fc.string({
 export const codePoints = (s: string): number => Array.from(s).length;
 
 /**
- * What `NameSchema` refuses (F7): control, format and line/paragraph separator characters. Built at
- * runtime, independently of the schema's own copy, so no invisible character sits in this file.
+ * What `NameSchema` refuses: control, format and line/paragraph separator characters (F7), and emoji
+ * (REQ-044: pictographs, flags, skin tones, variation selectors, the keycap). Built at runtime,
+ * independently of the schema's own copy, so no invisible character sits in this file.
  */
+const cp = (...codes: number[]): string => String.fromCodePoint(...codes);
 export const forbiddenNameChars = new RegExp(
-  `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
+  [
+    `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
+    '\\p{Extended_Pictographic}',
+    `[${cp(0x1f1e6)}-${cp(0x1f1ff)}]`, // regional indicators (flags)
+    `[${cp(0x1f3fb)}-${cp(0x1f3ff)}]`, // skin tones
+    cp(0xfe0e), // variation selector-15
+    cp(0xfe0f), // variation selector-16
+    cp(0x20e3), // combining enclosing keycap
+  ].join('|'),
   'gu',
 );
 

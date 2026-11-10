@@ -235,6 +235,8 @@ export const COPY = {
   },
   errors: {
     nameInvalid: (max: number) => `Enter your name (1–${String(max)} characters) to play.`,
+    nameSymbols:
+      "Names can't include emoji or special symbols. Use letters, numbers and punctuation.",
     codeInvalid: 'Room codes have 6 letters and numbers. Check the code and try again.',
     roomNotFound: (code: string) =>
       `There's no game with code ${code}. Check the code with your friend, or create a new game.`,
