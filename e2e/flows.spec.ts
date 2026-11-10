@@ -214,9 +214,11 @@ test.describe('REQ-031 disconnect, pause, resume, forfeit', () => {
         .filter((m) => m.type === 'snapshot')
         .at(-1);
       expect(pausedSnapshot, 'B received a snapshot before `paused`').toBeDefined();
-      const pausedPieces = (seat: 'A' | 'B'): number =>
-        (pausedSnapshot?.players as Record<string, { stats: { piecesPlaced: number } }>)[seat].stats
-          .piecesPlaced;
+      const pausedPieces = (seat: 'A' | 'B'): number => {
+        const players = pausedSnapshot?.players as
+          Record<string, { stats: { piecesPlaced: number } } | undefined> | undefined;
+        return players?.[seat]?.stats.piecesPlaced ?? Number.NaN;
+      };
       const graceMs = Number(paused?.graceEndsAt) - Number(paused?.serverNow);
       expect(graceMs).toBeGreaterThanOrEqual(19_900);
       expect(graceMs).toBeLessThanOrEqual(20_100);
