@@ -15,7 +15,7 @@ import { realClock, type Clock } from './clock.js';
 import { CLOSE } from './codes.js';
 import { DEFAULT_LIMITS, resolvePort, type Limits } from './config.js';
 import { ConnectionHub } from './connection.js';
-import { registerHttp, respondToFrameworkError } from './http.js';
+import { guardOrigin, registerHttp, respondToFrameworkError } from './http.js';
 import { createLogger, EventLog } from './log.js';
 import { GameLoop } from './loop.js';
 import type { MatchSeeds } from './match.js';
@@ -140,7 +140,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
   });
   const hub = new ConnectionHub({ clock, log, limits, registry, clientIp, throwOn: test?.throwOn });
 
-  app.get(WS_PATH, { websocket: true }, (socket, request) => {
+  app.get(WS_PATH, { websocket: true, onRequest: guardOrigin }, (socket, request) => {
     safeCall(
       log,
       {},
