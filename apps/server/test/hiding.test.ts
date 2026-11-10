@@ -44,7 +44,8 @@ describe('REQ-065 source spec §8.2 — information hiding (#14)', () => {
       }
     }
     expect(watcher.all('snapshot').every((s) => s.you === undefined)).toBe(true);
-  });
+    // ~1 s alone, but the whole suite runs files in parallel: don't flake at the 5 s default under load.
+  }, 30_000);
 });
 
 describe('REQ-028 what each recipient receives', () => {

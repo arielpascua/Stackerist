@@ -56,7 +56,11 @@ describe('REQ-081 flood limits', () => {
   });
 
   it('REQ-081 at most 20 failed joins per minute per IP; then even a valid code is refused without a lookup', async () => {
-    h = await startTestServer({ clientIp: { source: 'x-real-ip' } });
+    // The per-connection non-input bucket (F9) has its own tests; lift it so this one isolates the window.
+    h = await startTestServer({
+      clientIp: { source: 'x-real-ip' },
+      limits: { nonInputBurst: 1000 },
+    });
     const host = await createFrom(IP_2);
     const code = host.all('created')[0]?.code ?? '';
     const c = await h.connect({ headers: { 'X-Real-IP': IP_1 } });

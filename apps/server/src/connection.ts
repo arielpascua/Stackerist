@@ -326,7 +326,13 @@ export class ConnectionHub {
     const msg = parsed.msg;
     // 3. Test-only fault injection.
     if (this.#deps.throwOn?.(msg) === true) throw new Error('fault injected by test.throwOn');
-    // 4. Dispatch.
+    // 4. Everything but an input draws one token from the connection's non-input bucket (F9); the input
+    //    bucket is charged separately, inside Match.receiveInput. Charged before any state is written.
+    if (msg.type !== 'input' && !conn.nonInputBucket.take(this.#deps.clock.monotonicMs())) {
+      this.#badMessage(conn, 'NON_INPUT_DROP');
+      return;
+    }
+    // 5. Dispatch.
     switch (msg.type) {
       case 'create':
         this.#create(conn, msg);
@@ -367,9 +373,10 @@ export class ConnectionHub {
     }
   }
 
-  #badMessage(conn: Connection): void {
+  /** A bad or over-rate message: BAD_MESSAGE back, counted toward the 20-strike disconnect. */
+  #badMessage(conn: Connection, rule: AnticheatRule = ERR.BAD_MESSAGE): void {
     conn.badMessages += 1;
-    this.#reject(conn, ERR.BAD_MESSAGE, ERR.BAD_MESSAGE);
+    this.#reject(conn, ERR.BAD_MESSAGE, rule);
     if (conn.badMessages >= this.#deps.limits.maxBadMessages) {
       this.#deps.log.anticheat(CLOSE.TOO_MANY_BAD_MESSAGES, { conn: conn.id });
       this.#disconnect(conn, CLOSE.TOO_MANY_BAD_MESSAGES);
