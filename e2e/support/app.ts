@@ -33,6 +33,8 @@ export interface PlayerOptions {
   readonly viewport?: { readonly width: number; readonly height: number };
   /** Emulate a touch phone (isMobile + hasTouch). */
   readonly mobile?: boolean;
+  /** `prefers-reduced-motion: reduce` for this player. */
+  readonly reducedMotion?: boolean;
 }
 
 export const DESKTOP = { width: 1280, height: 600 } as const;
@@ -45,6 +47,7 @@ export async function newPlayer(
 ): Promise<Player> {
   const context = await browser.newContext({
     viewport: options.viewport ?? DESKTOP,
+    ...(options.reducedMotion === true ? { reducedMotion: 'reduce' as const } : {}),
     ...(options.mobile === true
       ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
       : { deviceScaleFactor: 1 }),

@@ -6,20 +6,28 @@
  * report numbers) come from the frames the page's own WebSocket received.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { emptyBoard, type Board } from '../packages/engine/src/index.ts';
+import { MUSIC_STORAGE_KEY } from '../packages/protocol/src/constants.ts';
 import type { GameOverMessage } from '../packages/protocol/src/index.ts';
 import {
   closeAll,
   COPY,
+  createGame,
   DATA_HOOKS,
+  joinViaLink,
   newPlayer,
   ownCanvas,
+  ownStat,
+  oppCanvas,
   resultCard,
+  sleep,
   startMatch,
   TEST_IDS,
   verdictOf,
   waitUntilLive,
   type Player,
 } from './support/app.ts';
+import { placeOnePiece } from './support/bot.ts';
 import { watchFrames } from './support/frames.ts';
 import {
   lastGameOver,
@@ -46,10 +54,48 @@ interface StandoffLog {
   probes: { phase: string; before: string | null; after: string | null }[];
 }
 
+interface FxLog {
+  /** Highest `data-fx` (effects running) seen on the fx canvas. */
+  maxFx: number;
+  /** Last `data-projectile-count` (projectiles launched since the arena mounted). */
+  launched: number;
+  /** Highest pending garbage rows seen on this player's own meter. */
+  maxPending: number;
+}
+
 declare global {
   interface Window {
     __standoff?: StandoffLog;
+    __fxLog?: FxLog;
   }
+}
+
+/** Installed before load: records the fx canvas hooks and the own meter's pending rows as they change. */
+function installFxRecorder(args: {
+  fx: string;
+  meter: string;
+  activeHook: string;
+  countHook: string;
+}): void {
+  const log: FxLog = { maxFx: 0, launched: 0, maxPending: 0 };
+  window.__fxLog = log;
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      const target = record.target as Element;
+      const id = target.getAttribute('data-testid');
+      if (id === args.fx) {
+        log.maxFx = Math.max(log.maxFx, Number(target.getAttribute(args.activeHook) ?? 0));
+        log.launched = Number(target.getAttribute(args.countHook) ?? 0);
+      } else if (id === args.meter) {
+        log.maxPending = Math.max(log.maxPending, Number(target.getAttribute('data-pending') ?? 0));
+      }
+    }
+  });
+  observer.observe(document, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: [args.activeHook, args.countHook, 'data-pending'],
+  });
 }
 
 /**
@@ -613,6 +659,557 @@ test.describe('REQ-090/091 the round report', () => {
   });
 });
 
-// Keep imports referenced while the spec grows.
-void loseRound;
-void waitUntilLive;
+// ---------------------------------------------------------------------------------------------
+// REQ-061 / REQ-087 / REQ-088: the duel effects in a real match
+// ---------------------------------------------------------------------------------------------
+
+const PIECE_HOOK = /^[IOTSZJL]:[0-3]:-?\d+:-?\d+$/;
+
+interface RingSample {
+  /** Alpha (0..255) of the danger ring pixel, min and max over the sampling window. */
+  readonly ringMin: number;
+  readonly ringMax: number;
+  /** The board frame pixel, RGBA, at the end of the window. */
+  readonly frame: readonly number[];
+  readonly samples: number;
+}
+
+/**
+ * Runs in the page: reads one pixel of the ring (the 2 px padding above the board) and one of the
+ * frame (just below it) from the board canvas on every animation frame for `ms`. The canvas is drawn
+ * at device-pixel-ratio 1 in these tests, so CSS px = canvas px.
+ */
+function sampleDangerInPage(args: { id: string; ms: number }): Promise<RingSample> {
+  const canvas = document.querySelector<HTMLCanvasElement>(`[data-testid="${args.id}"]`);
+  const ctx = canvas?.getContext('2d') ?? null;
+  if (canvas === null || ctx === null) throw new Error(`no 2d canvas ${args.id}`);
+  const x = canvas.width - 40;
+  return new Promise((resolve) => {
+    const start = performance.now();
+    let ringMin = 255;
+    let ringMax = 0;
+    let samples = 0;
+    const tick = (): void => {
+      const alpha = ctx.getImageData(x, 0, 1, 1).data[3] ?? 0;
+      ringMin = Math.min(ringMin, alpha);
+      ringMax = Math.max(ringMax, alpha);
+      samples += 1;
+      if (performance.now() - start < args.ms) {
+        window.requestAnimationFrame(tick);
+        return;
+      }
+      resolve({
+        ringMin,
+        ringMax,
+        frame: Array.from(ctx.getImageData(x, 2, 1, 1).data),
+        samples,
+      });
+    };
+    window.requestAnimationFrame(tick);
+  });
+}
+
+/** The alert colour of the design tokens: #FF5A36. */
+function isAlertRed(rgba: readonly number[]): boolean {
+  const [r = 0, g = 0, b = 0, a = 0] = rgba;
+  return a === 255 && Math.abs(r - 0xff) <= 8 && Math.abs(g - 0x5a) <= 8 && Math.abs(b - 0x36) <= 8;
+}
+
+/** Space (hard drop) on `player` until its own board's danger hook is on; stops at once. */
+async function stackUntilDanger(player: Player): Promise<void> {
+  const own = ownCanvas(player.page);
+  for (let i = 0; i < 40; i += 1) {
+    if ((await own.getAttribute(DATA_HOOKS.danger)) === 'true') return;
+    await player.page.keyboard.press('Space');
+    await sleep(70);
+  }
+  throw new Error(`${player.name}'s board never reached danger in 40 drops`);
+}
+
+test.describe('REQ-061/087/088 duel effects', () => {
+  test('REQ-061 the ghost is on your own board only, and follows the piece', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    try {
+      await startMatch(a, b);
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+      for (const player of [a, b]) {
+        const own = ownCanvas(player.page);
+        await expect(own).toHaveAttribute(DATA_HOOKS.ghost, PIECE_HOOK);
+        // The opponent's board never carries a ghost (REQ-061: a ghost is your own aid).
+        await expect(oppCanvas(player.page)).toHaveAttribute(DATA_HOOKS.ghost, '');
+        // The ghost is the falling piece, straight down: same kind, rotation and column.
+        const active = ((await own.getAttribute(DATA_HOOKS.active)) ?? '').split(':');
+        const ghost = ((await own.getAttribute(DATA_HOOKS.ghost)) ?? '').split(':');
+        expect(ghost.slice(0, 3), 'ghost kind, rotation, column').toEqual(active.slice(0, 3));
+        expect(Number(ghost[3])).toBeGreaterThanOrEqual(Number(active[3]));
+      }
+      // Moving the piece moves the ghost with it.
+      const before = ((await ownCanvas(a.page).getAttribute(DATA_HOOKS.ghost)) ?? '').split(':');
+      await a.page.keyboard.press('ArrowLeft');
+      await expect
+        .poll(
+          async () =>
+            ((await ownCanvas(a.page).getAttribute(DATA_HOOKS.ghost)) ?? '').split(':')[2],
+        )
+        .toBe(String(Number(before[2]) - 1));
+      await expect(oppCanvas(a.page)).toHaveAttribute(DATA_HOOKS.ghost, '');
+      expect(a.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+
+  test('REQ-087 garbage sent by one player launches a projectile that lands on the receiver', async ({
+    browser,
+  }) => {
+    test.setTimeout(150_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    const framesB = watchFrames(b.page);
+    try {
+      // Both pages record the fx canvas and Bob's own garbage meter from the first frame on.
+      for (const player of [a, b]) {
+        await player.page.addInitScript(installFxRecorder, {
+          fx: TEST_IDS.game.fxCanvas,
+          meter: TEST_IDS.game.ownMeter,
+          activeHook: DATA_HOOKS.fx,
+          countHook: DATA_HOOKS.projectileCount,
+        });
+      }
+      await startMatch(a, b);
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+      await expect(b.page.getByTestId(TEST_IDS.game.fxCanvas)).toHaveAttribute(
+        DATA_HOOKS.projectileCount,
+        '0',
+      );
+
+      // Alice stacks with the greedy bot until her Sent counter moves (a double, or a combo).
+      let board: Board = emptyBoard();
+      let placed = 0;
+      for (; placed < 80 && (await ownStat(a.page, COPY.game.sent)) === 0; placed += 1) {
+        const next = await placeOnePiece(a.page, board);
+        if (next === null) break;
+        board = next;
+      }
+      const sent = await ownStat(a.page, COPY.game.sent);
+      console.log(`GARBAGE: Alice sent ${String(sent)} after ${String(placed)} pieces`);
+      expect(sent, `the bot sent no garbage in ${String(placed)} pieces`).toBeGreaterThan(0);
+
+      // The receiver: a projectile was launched, ran (fx > 0), and is gone again (fx back to 0).
+      const fxB = b.page.getByTestId(TEST_IDS.game.fxCanvas);
+      await expect(fxB).not.toHaveAttribute(DATA_HOOKS.projectileCount, '0');
+      await expect(fxB).toHaveAttribute(DATA_HOOKS.fx, '0', { timeout: 10_000 });
+      const logB = await b.page.evaluate(() => window.__fxLog);
+      const logA = await a.page.evaluate(() => window.__fxLog);
+      console.log(`FX receiver ${JSON.stringify(logB)}\nFX sender   ${JSON.stringify(logA)}`);
+      expect(logB?.maxFx, 'a projectile was running on the receiver').toBeGreaterThan(0);
+      expect(logB?.launched ?? 0, 'projectiles launched on the receiver').toBeGreaterThanOrEqual(1);
+      expect(logB?.maxPending ?? 0, "the garbage meter on Bob's board rose").toBeGreaterThanOrEqual(
+        1,
+      );
+
+      // The server's own account: Bob was sent an attack from Alice, and the totals agree.
+      const attacks = framesB
+        .ofType('snapshot')
+        .flatMap((m) => (m.events ?? []) as { type: string; from?: string; rows: number }[])
+        .filter((event) => event.type === 'attack' && event.from === 'A');
+      expect(attacks.length, 'attack events from Alice reached Bob').toBeGreaterThanOrEqual(1);
+      await expect
+        .poll(
+          async () =>
+            framesB
+              .ofType('snapshot')
+              .flatMap((m) => (m.events ?? []) as { type: string; from?: string; rows: number }[])
+              .filter((event) => event.type === 'attack' && event.from === 'A')
+              .reduce((sum, event) => sum + event.rows, 0) -
+            (await ownStat(a.page, COPY.game.sent)),
+        )
+        .toBe(0);
+      expect(a.problems).toEqual([]);
+      expect(b.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+
+  test('REQ-088 danger: both boards flip on, the frame is red and pulses (steady under reduced motion)', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob', { reducedMotion: true });
+    try {
+      await startMatch(a, b);
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+      // Before any stacking: no danger on any of the four canvases.
+      for (const player of [a, b]) {
+        await expect(ownCanvas(player.page)).toHaveAttribute(DATA_HOOKS.danger, 'false');
+        await expect(oppCanvas(player.page)).toHaveAttribute(DATA_HOOKS.danger, 'false');
+      }
+      const calm = await a.page.evaluate(sampleDangerInPage, {
+        id: TEST_IDS.game.ownCanvas,
+        ms: 200,
+      });
+      expect(calm.ringMax, 'no ring while calm').toBe(0);
+      expect(isAlertRed(calm.frame), 'the frame is not red while calm').toBe(false);
+
+      // Both players stack in the middle until their own board is in danger (height >= 16).
+      await stackUntilDanger(a);
+      await stackUntilDanger(b);
+      // Each page shows danger on BOTH boards: its own, and the opponent's (public snapshots).
+      for (const player of [a, b]) {
+        await expect(ownCanvas(player.page)).toHaveAttribute(DATA_HOOKS.danger, 'true');
+        await expect(oppCanvas(player.page)).toHaveAttribute(DATA_HOOKS.danger, 'true', {
+          timeout: 5_000,
+        });
+      }
+
+      // The frame is red on every board, on both pages.
+      for (const player of [a, b]) {
+        for (const id of [TEST_IDS.game.ownCanvas, TEST_IDS.game.oppCanvas]) {
+          const look = await player.page.evaluate(sampleDangerInPage, { id, ms: 1_200 });
+          console.log(`DANGER ${player.name} ${id}: ${JSON.stringify(look)}`);
+          expect(isAlertRed(look.frame), `${player.name} ${id}: red frame`).toBe(true);
+          expect(look.ringMax, `${player.name} ${id}: ring is drawn`).toBeGreaterThan(0);
+          if (player === a) {
+            // Alice: normal motion. The ring pulses (alpha 1 -> 0.25 over a 900 ms cycle).
+            expect(look.ringMax - look.ringMin, `${id}: ring alpha pulses`).toBeGreaterThan(100);
+          } else {
+            // Bob: reduced motion. The same frame, but a steady ring.
+            expect(look.ringMax - look.ringMin, `${id}: ring alpha is steady`).toBeLessThanOrEqual(
+              2,
+            );
+          }
+        }
+      }
+      expect(a.problems).toEqual([]);
+      expect(b.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// REQ-089: the music button (never the audio itself: headless Chromium cannot be heard)
+// ---------------------------------------------------------------------------------------------
+
+test.describe('REQ-089 the music button', () => {
+  test('REQ-089 lobby footer and game top bar; click and M toggle aria-pressed; the choice survives a reload', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    try {
+      const created = await createGame(a);
+      const button = a.page.getByTestId(TEST_IDS.music.button);
+
+      // Lobby: the button is in the footer, named "Music", with the M key cap, on by default.
+      await expect(a.page.getByTestId(TEST_IDS.lobby.screen).locator('footer')).toContainText(
+        COPY.music.name,
+      );
+      await expect(a.page.getByTestId(TEST_IDS.lobby.screen).locator('footer')).toContainText(
+        COPY.music.key,
+      );
+      await expect(button).toHaveAccessibleName(new RegExp(COPY.music.name));
+      await expect(button).toHaveAttribute('aria-pressed', 'true');
+      const stored = () => a.page.evaluate((key) => localStorage.getItem(key), MUSIC_STORAGE_KEY);
+      // The audio may be locked until a gesture; if so the UI says so and a click unlocks it.
+      const state = await button.getAttribute('data-state');
+      console.log(`MUSIC initial state: ${String(state)}`);
+      expect(['on', 'blocked', 'off', 'unavailable']).toContain(state);
+      if (state === 'blocked') {
+        await expect(a.page.getByTestId(TEST_IDS.music.hint)).toHaveText(COPY.music.blockedHint);
+        await button.click(); // the gesture that starts it: stays "on", does not mute
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+        await expect(button).not.toHaveAttribute('data-state', 'blocked');
+      } else if (state === 'unavailable') {
+        await expect(a.page.getByTestId(TEST_IDS.music.hint)).toHaveText(
+          COPY.music.unavailableHint,
+        );
+      }
+
+      if (state !== 'unavailable') {
+        // Click toggles off, then on.
+        await button.click();
+        await expect(button).toHaveAttribute('aria-pressed', 'false');
+        await expect.poll(stored).toBe('off');
+        await button.click();
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(stored).toBe('on');
+        // The M key toggles too (focus on the page body, not in a text field), and announces it.
+        await a.page.keyboard.press('m');
+        await expect(button).toHaveAttribute('aria-pressed', 'false');
+        await expect(a.page.getByTestId(TEST_IDS.music.live)).toHaveText(COPY.music.announceOff);
+        await expect.poll(stored).toBe('off');
+        await a.page.keyboard.press('m');
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+        await expect(a.page.getByTestId(TEST_IDS.music.live)).toHaveText(COPY.music.announceOn);
+        // Leave it off, and reload: the preference survives (localStorage, MUSIC_STORAGE_KEY).
+        await button.click();
+        await expect(button).toHaveAttribute('aria-pressed', 'false');
+        await expect.poll(stored).toBe('off');
+        await a.page.reload();
+        await expect(a.page.getByTestId(TEST_IDS.lobby.screen)).toBeVisible();
+        await expect(a.page.getByTestId(TEST_IDS.music.button)).toHaveAttribute(
+          'aria-pressed',
+          'false',
+        );
+        expect(await stored()).toBe('off');
+      }
+
+      // Game top bar: Bob joins; the button sits in the header and shows the same remembered choice.
+      await joinViaLink(b, created.link, created.code);
+      for (const player of [a, b]) {
+        await expect(player.page.getByTestId(TEST_IDS.game.screen)).toBeVisible();
+        await expect(
+          player.page.locator('header').getByTestId(TEST_IDS.music.button),
+        ).toBeVisible();
+      }
+      if (state !== 'unavailable') {
+        const inGame = a.page.locator('header').getByTestId(TEST_IDS.music.button);
+        await expect(inGame).toHaveAttribute('aria-pressed', 'false');
+        // M works while a round is on: it must not reach the board as a game key.
+        await waitUntilLive(a);
+        await a.page.keyboard.press('m');
+        await expect(inGame).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(stored).toBe('on');
+        await expect(ownCanvas(a.page)).not.toHaveAttribute(DATA_HOOKS.active, '');
+        await inGame.click();
+        await expect(inGame).toHaveAttribute('aria-pressed', 'false');
+        // Bob never touched his own preference: another browser context keeps its own storage.
+        await expect(b.page.locator('header').getByTestId(TEST_IDS.music.button)).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      }
+      expect(a.problems).toEqual([]);
+      expect(b.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// REQ-062: the spectator view
+// ---------------------------------------------------------------------------------------------
+
+test.describe('REQ-062 a spectator', () => {
+  test('REQ-062 sees both boards read-only with names and score; players see the count', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    const cara = await newPlayer(browser, 'Cara');
+    try {
+      const { code, link } = await startMatch(a, b);
+      await joinViaLink(cara, link, code);
+      const view = cara.page;
+      await expect(view.getByTestId(TEST_IDS.game.screen)).toHaveAttribute(
+        'data-role',
+        'spectator',
+      );
+      await expect(a.page.getByTestId(TEST_IDS.game.spectators)).toHaveText(COPY.game.watching(1));
+      await expect(b.page.getByTestId(TEST_IDS.game.spectators)).toHaveText(COPY.game.watching(1));
+
+      // Both boards, with the players' names (A left, B right), the round and the score.
+      await expect(view.getByTestId(TEST_IDS.game.ownName)).toHaveText(a.name);
+      await expect(view.getByTestId(TEST_IDS.game.oppName)).toHaveText(b.name);
+      await expect(view.getByTestId(TEST_IDS.game.roundTag)).toHaveText(COPY.game.roundTag(1));
+      expect(await pipsOf(view)).toEqual({ own: 0, opp: 0 });
+      await expect(view.getByTestId(TEST_IDS.game.ownPips)).toHaveAccessibleName(
+        COPY.game.pipsName(a.name, 0),
+      );
+      await expect(view.getByTestId(TEST_IDS.game.leaveButton)).toHaveText(COPY.game.stopWatching);
+      // No controls legend for a spectator, and no Leave confirm.
+      await expect(view.getByTestId(TEST_IDS.game.legend)).toHaveCount(0);
+      for (const id of [TEST_IDS.game.ownCanvas, TEST_IDS.game.oppCanvas]) {
+        const box = await view.getByTestId(id).boundingBox();
+        expect(box?.width ?? 0).toBeGreaterThan(0);
+        expect(box?.height ?? 0).toBeGreaterThan(0);
+      }
+
+      // Live: both players' boards move on the spectator's screen as they play.
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+      await expect(view.getByTestId(TEST_IDS.game.ownCanvas)).not.toHaveAttribute(
+        DATA_HOOKS.active,
+        '',
+      );
+      await expect(view.getByTestId(TEST_IDS.game.oppCanvas)).not.toHaveAttribute(
+        DATA_HOOKS.active,
+        '',
+      );
+      // The spectator sees no ghost: it is a player's own aid.
+      await expect(view.getByTestId(TEST_IDS.game.ownCanvas)).toHaveAttribute(DATA_HOOKS.ghost, '');
+      await a.page.keyboard.press('Space');
+      await expect
+        .poll(() => specStat(view, TEST_IDS.game.ownStats, COPY.game.pieces), { timeout: 5_000 })
+        .toBe(1);
+      await b.page.keyboard.press('Space');
+      await b.page.keyboard.press('Space');
+      await expect
+        .poll(() => specStat(view, TEST_IDS.game.oppStats, COPY.game.pieces), { timeout: 5_000 })
+        .toBe(2);
+
+      // Read-only: a spectator's game keys do nothing to either board.
+      for (const key of ['Space', 'ArrowLeft', 'ArrowUp', 'KeyX']) await view.keyboard.press(key);
+      await expect.poll(() => specStat(a.page, TEST_IDS.game.ownStats, COPY.game.pieces)).toBe(1);
+      expect(await specStat(b.page, TEST_IDS.game.ownStats, COPY.game.pieces)).toBe(2);
+      expect(cara.problems, 'the spectator was not kicked or errored').toEqual([]);
+      await expect(view.getByTestId(TEST_IDS.game.screen)).toBeVisible();
+
+      // The round ends (Bob hammers and loses): the spectator gets a card for the winner, no buttons
+      // to press but Back to home, and the report lists both players by name.
+      await loseRound(b, [a, b, cara]);
+      await expect(resultCard(view)).toHaveAttribute('data-kind', 'round');
+      await expect(view.getByTestId(TEST_IDS.result.headline)).toHaveText(COPY.result.wins(a.name));
+      await expect(view.getByTestId(TEST_IDS.result.primaryButton)).toHaveCount(0);
+      await expect(view.getByTestId(TEST_IDS.result.backButton)).toHaveText(COPY.result.backToHome);
+      await expect(view.getByTestId(TEST_IDS.result.status)).toHaveText(
+        COPY.result.spectatorWaiting,
+      );
+      const heads = view.getByTestId(TEST_IDS.result.statsTable).locator('thead th');
+      await expect(heads.nth(1)).toHaveText(a.name);
+      await expect(heads.nth(2)).toHaveText(b.name);
+      expect(await seriesBugText(view)).toBe(seriesBug(a.name, 1, 0, b.name));
+      // Spectators see names in the chart, never "You".
+      await expect(view.getByTestId(TEST_IDS.result.chartLegend)).toContainText(a.name);
+      await expect(view.getByTestId(TEST_IDS.result.chartLegend)).not.toContainText(
+        COPY.result.chart.you,
+      );
+      expect(cara.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b, cara]);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The known stale "disconnected 0 s" overlay, on the paths the E2E_SLOW test does not cover
+// ---------------------------------------------------------------------------------------------
+
+test.describe('disconnect overlay after a pause that resumed', () => {
+  test('the overlay is gone at the round card, the next countdown and the series card', async ({
+    browser,
+  }) => {
+    test.setTimeout(150_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    try {
+      await startMatch(a, b);
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+      // Alice's tab leaves the game page mid-round (its socket closes at once), then comes back to the
+      // same game address with the same session and rejoins her seat.
+      const overlay = b.page.getByTestId(TEST_IDS.disconnect.overlay);
+      const gameUrl = a.page.url();
+      await a.page.goto('about:blank');
+      await expect(overlay).toBeVisible({ timeout: 10_000 });
+      await a.page.goto(gameUrl);
+      await expect(a.page.getByTestId(TEST_IDS.game.screen)).toBeVisible();
+      await expect(overlay).toBeHidden({ timeout: 10_000 });
+      await waitUntilLive(a);
+      await waitUntilLive(b);
+
+      // Between rounds: the round ends normally; no overlay on either card.
+      await loseRound(b, [a, b]);
+      await expect(resultCard(a.page)).toHaveAttribute('data-kind', 'round');
+      for (const player of [a, b]) {
+        await expect
+          .soft(
+            player.page.getByTestId(TEST_IDS.disconnect.overlay),
+            `${player.name}: no disconnect overlay under the round card`,
+          )
+          .toHaveCount(0);
+      }
+      await pressPrimary(a);
+      await pressPrimary(b);
+      for (const player of [a, b]) {
+        await expect(player.page.getByTestId(TEST_IDS.countdown.round)).toHaveText(
+          COPY.game.roundTag(2),
+        );
+        await expect
+          .soft(
+            player.page.getByTestId(TEST_IDS.disconnect.overlay),
+            `${player.name}: no disconnect overlay in the next round's countdown`,
+          )
+          .toHaveCount(0);
+      }
+
+      // Series end: Alice takes round 2, so the series (2 - 0); no overlay on the series card.
+      await playRound(a, b, b);
+      for (const player of [a, b]) {
+        await expect(resultCard(player.page)).toHaveAttribute('data-kind', 'series');
+        await expect
+          .soft(
+            player.page.getByTestId(TEST_IDS.disconnect.overlay),
+            `${player.name}: no disconnect overlay under the series card`,
+          )
+          .toHaveCount(0);
+      }
+      expect(await verdictOf(a.page, { me: a.name, opponent: b.name })).toBe('win');
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+});
+
+test.describe('a drop between rounds', () => {
+  test('the round card says the opponent is reconnecting (no overlay), and Next round still works after they return', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const a = await newPlayer(browser, 'Alice');
+    const b = await newPlayer(browser, 'Bob');
+    try {
+      await startMatch(a, b);
+      await playRound(a, b, b);
+      await expect(resultCard(b.page)).toHaveAttribute('data-kind', 'round');
+      const gameUrl = a.page.url();
+      await a.page.goto('about:blank');
+      await expect(b.page.getByTestId(TEST_IDS.result.status)).toHaveText(
+        COPY.result.opponentReconnecting(a.name),
+        { timeout: 10_000 },
+      );
+      await expect(b.page.getByTestId(TEST_IDS.disconnect.overlay)).toHaveCount(0);
+      await expect(resultCard(b.page)).toBeVisible();
+      await a.page.goto(gameUrl);
+      await expect(resultCard(a.page)).toBeVisible({ timeout: 10_000 });
+      await expect(b.page.getByTestId(TEST_IDS.result.status)).toHaveText('');
+      // Both accept: the next round starts as usual.
+      await pressPrimary(a);
+      await pressPrimary(b);
+      for (const player of [a, b]) {
+        await expect(player.page.getByTestId(TEST_IDS.countdown.round)).toHaveText(
+          COPY.game.roundTag(2),
+        );
+        await expect(player.page.getByTestId(TEST_IDS.disconnect.overlay)).toHaveCount(0);
+      }
+      expect(await pipsOf(a.page)).toEqual({ own: 1, opp: 0 });
+      expect(b.problems).toEqual([]);
+    } finally {
+      await closeAll([a, b]);
+    }
+  });
+});
+
+/** One value from a stats block (`testId`) of any page, as a number. */
+async function specStat(page: Page, testId: string, label: string): Promise<number> {
+  const value = page
+    .getByTestId(testId)
+    .locator('dt')
+    .filter({ hasText: label })
+    .locator('xpath=following-sibling::dd[1]');
+  return Number((await value.textContent()) ?? Number.NaN);
+}
