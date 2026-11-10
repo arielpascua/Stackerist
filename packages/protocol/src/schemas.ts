@@ -80,10 +80,28 @@ export const RoomCodeSchema = z.string().trim().regex(ROOM_CODE_PATTERN).toUpper
  */
 export const RoomCodeInputSchema = z.string().min(1).max(ROOM_CODE_INPUT_MAX_LENGTH);
 /**
+ * What a name may not contain (security review F7): control characters (Unicode Cc: NUL, newline, tab,
+ * DEL, C1), format characters (Cf: zero-width, bidirectional overrides and isolates, marks, BOM, soft
+ * hyphen, tags) and the line and paragraph separators. The two separators are added from their code
+ * points so no invisible character sits in this file. A consequence: an emoji joined with a zero-width
+ * joiner (a family, a profession) is refused; single emoji and variation-selector hearts are fine.
+ */
+const FORBIDDEN_NAME_CHARS = new RegExp(
+  `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
+  'u',
+);
+/**
  * Player name (REQ-044): trimmed first, then NAME_MIN_LENGTH..NAME_MAX_LENGTH Unicode code points
  * (zod 4.6 counts a surrogate pair once). The one name validator: the UI uses it too.
  */
-export const NameSchema = z.string().trim().min(NAME_MIN_LENGTH).max(NAME_MAX_LENGTH);
+export const NameSchema = z
+  .string()
+  .trim()
+  .min(NAME_MIN_LENGTH)
+  .max(NAME_MAX_LENGTH)
+  .refine((name) => !FORBIDDEN_NAME_CHARS.test(name), {
+    message: 'A name is visible text: no control, format or bidirectional characters',
+  });
 /** Seat token: SEAT_TOKEN_LENGTH base64url characters, no padding (128-bit). */
 export const SeatTokenSchema = z
   .string()

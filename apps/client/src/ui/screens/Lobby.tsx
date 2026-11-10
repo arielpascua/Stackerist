@@ -6,6 +6,7 @@ import { type RoomCode, type RoomMessage, type Seat, shareUrl } from '@stackeris
 import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from '../../../../../design/tokens/tokens.ts';
 import type { Music, Role } from '../../game/contract.ts';
+import { Bdi, withNames } from '../components/Bdi.tsx';
 import { ArenaPage, Button, Logo } from '../components/common.tsx';
 import { LeaveConfirm } from '../components/LeaveConfirm.tsx';
 import { MusicButton } from '../components/MusicButton.tsx';
@@ -167,7 +168,7 @@ export function Lobby(props: LobbyProps) {
         ) : (
           <>
             <p className="series-line" data-testid={TEST_IDS.lobby.seriesLine}>
-              {seriesLine(room, names)}
+              {withNames(seriesLine(room, names), [names.A, names.B])}
             </p>
             <ul
               className="players"
@@ -186,7 +187,7 @@ export function Lobby(props: LobbyProps) {
                     {player !== undefined ? (
                       <>
                         <span className="player__name" title={player.name}>
-                          {player.name}
+                          <Bdi>{player.name}</Bdi>
                         </span>
                         {role === seat ? <span className="label">{COPY.lobby.you}</span> : null}
                         {!player.connected ? (

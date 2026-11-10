@@ -7,6 +7,7 @@
 import { type CSSProperties, useEffect, useId, useRef } from 'react';
 import { computeBestMomentCell, motion } from '../../../../../design/tokens/tokens.ts';
 import type { DrawBestMoment } from '../../game/contract.ts';
+import { Bdi, withNames } from '../components/Bdi.tsx';
 import { Button } from '../components/common.tsx';
 import { StackChart } from '../components/StackChart.tsx';
 import { COPY } from '../copy.ts';
@@ -27,10 +28,12 @@ function BestMoment({
   view,
   drawBestMoment,
   viewportHeight,
+  seatNames,
 }: {
   readonly view: BestMomentView;
   readonly drawBestMoment: DrawBestMoment;
   readonly viewportHeight: number;
+  readonly seatNames: readonly string[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -39,7 +42,7 @@ function BestMoment({
   }, [drawBestMoment, view.moment, viewportHeight]);
   return (
     <figure className="best-moment" data-testid={TEST_IDS.result.bestMoment} data-seat={view.seat}>
-      <p className="label">{view.label}</p>
+      <p className="label">{withNames(view.label, seatNames)}</p>
       <p className="best-moment__title">
         <span className="onair-skew">{view.title}</span>
       </p>
@@ -73,6 +76,7 @@ export function ResultCard(props: ResultCardProps) {
   const armedAtRef = useRef(Number.POSITIVE_INFINITY);
   const scale = useFitScale(frameRef, cardRef);
   const summary = view.summary;
+  const seatNames = [view.series.A.name, view.series.B.name];
   const headingId = useId();
 
   useEffect(() => {
@@ -121,10 +125,10 @@ export function ResultCard(props: ResultCardProps) {
                 tabIndex={-1}
                 data-testid={TEST_IDS.result.headline}
               >
-                <span className="onair-skew">{view.headline}</span>
+                <span className="onair-skew">{withNames(view.headline, seatNames)}</span>
               </h2>
               <p className="result-card__reason" data-testid={TEST_IDS.result.reason}>
-                {view.reason}
+                {withNames(view.reason, seatNames)}
               </p>
             </div>
             <div className="series-bug" data-kind={view.kind}>
@@ -132,13 +136,13 @@ export function ResultCard(props: ResultCardProps) {
                 <p className="label">{COPY.result.seriesLabel}</p>
                 <p className="series-bug__score">
                   <span className="series-bug__name" title={view.series.A.name}>
-                    {view.series.A.name}
+                    <Bdi>{view.series.A.name}</Bdi>
                   </span>
                   <span className="series-bug__digits">
                     {view.series.A.score} – {view.series.B.score}
                   </span>
                   <span className="series-bug__name" title={view.series.B.name}>
-                    {view.series.B.name}
+                    <Bdi>{view.series.B.name}</Bdi>
                   </span>
                 </p>
               </div>
@@ -155,11 +159,11 @@ export function ResultCard(props: ResultCardProps) {
                         <span className="label">{chip.label}</span>
                         {chip.draw ? null : (
                           <span className="round-chip__winner" title={chip.winner}>
-                            {chip.winner}
+                            <Bdi>{chip.winner}</Bdi>
                           </span>
                         )}
                       </span>
-                      <span className="sr-only">{chip.name}</span>
+                      <span className="sr-only">{withNames(chip.name, seatNames)}</span>
                     </li>
                   ))}
                 </ul>
@@ -179,10 +183,10 @@ export function ResultCard(props: ResultCardProps) {
                       <span className="sr-only">{COPY.result.statLabel}</span>
                     </th>
                     <th scope="col" className="report__head" title={view.columns[0]}>
-                      {view.columns[0]}
+                      {withNames(view.columns[0], seatNames)}
                     </th>
                     <th scope="col" className="report__head" title={view.columns[1]}>
-                      {view.columns[1]}
+                      {withNames(view.columns[1], seatNames)}
                     </th>
                   </tr>
                 </thead>
@@ -205,13 +209,14 @@ export function ResultCard(props: ResultCardProps) {
                   view={moment}
                   drawBestMoment={props.drawBestMoment}
                   viewportHeight={props.viewportHeight}
+                  seatNames={seatNames}
                 />
               ))}
             </div>
           ) : null}
           <footer className="result-card__actions">
             <p className="result-card__status" role="status" data-testid={TEST_IDS.result.status}>
-              {view.status}
+              {withNames(view.status, seatNames)}
             </p>
             {view.primary !== null ? (
               <Button

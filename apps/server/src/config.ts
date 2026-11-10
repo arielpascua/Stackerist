@@ -33,6 +33,22 @@ export interface Limits {
   readonly wsHardMaxPayloadBytes: number;
   /** Stack-height samples kept per seat per round (REQ-090). */
   readonly maxHeightSamples: number;
+  /** A socket whose send buffer is above this is closed SLOW_CONSUMER (it rejoins with its token), bytes. */
+  readonly maxBufferedBytes: number;
+  /** Live rooms a single client IP (/64 for IPv6) may have created at once (F2). */
+  readonly maxLiveRoomsPerIp: number;
+  /** Open sockets per client IP (F2). */
+  readonly maxSocketsPerIp: number;
+  /** Open sockets per process (F2). */
+  readonly maxSockets: number;
+  /** A room in roundOver or seriesOver with no activity is deleted after this, ms (F2). */
+  readonly idleFinishedRoomTtlMs: number;
+  /** No room outlives this, ms, whatever its state (F2). */
+  readonly maxRoomAgeMs: number;
+  /** Non-input message bucket per connection: capacity (F9). */
+  readonly nonInputBurst: number;
+  /** Non-input message bucket per connection: refill, tokens per second (F9). */
+  readonly nonInputRefillPerSec: number;
 }
 
 export const DEFAULT_LIMITS: Limits = Object.freeze({
@@ -50,10 +66,21 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
   waitingRoomTtlMs: 900_000,
   wsHardMaxPayloadBytes: 16_384,
   maxHeightSamples: MAX_HEIGHT_SAMPLES,
+  maxBufferedBytes: 512 * 1024,
+  maxLiveRoomsPerIp: 6,
+  maxSocketsPerIp: 40,
+  maxSockets: 2000,
+  idleFinishedRoomTtlMs: 600_000,
+  maxRoomAgeMs: 10_800_000,
+  nonInputBurst: 20,
+  nonInputRefillPerSec: 5,
 });
 
 /** Per-IP flood windows, ms (REQ-081: "per minute"). */
 export const IP_WINDOW_MS = 60_000;
+
+/** A refused socket (over a socket cap) that hasn't closed by now is terminated, ms. */
+export const REFUSED_SOCKET_GRACE_MS = 2000;
 
 export const DEFAULT_PORT = 3000;
 

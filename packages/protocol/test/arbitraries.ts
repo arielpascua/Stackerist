@@ -127,7 +127,16 @@ export const seatTokenArb = fc.string({
 /** Length in Unicode code points (a surrogate pair counts once), the unit zod 4.6 measures. */
 export const codePoints = (s: string): number => Array.from(s).length;
 
-/** Canonical (already trimmed) names of 1..16 code points, including control and astral characters. */
+/**
+ * What `NameSchema` refuses (F7): control, format and line/paragraph separator characters. Built at
+ * runtime, independently of the schema's own copy, so no invisible character sits in this file.
+ */
+export const forbiddenNameChars = new RegExp(
+  `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
+  'gu',
+);
+
+/** Canonical (already trimmed) names of 1..16 code points, including astral characters. */
 export const nameArb = fc
   .oneof(
     fc.string({ unit: 'grapheme-ascii', minLength: 1, maxLength: NAME_MAX_LENGTH }),
@@ -135,6 +144,7 @@ export const nameArb = fc
     fc.string({ unit: 'binary-ascii', minLength: 1, maxLength: NAME_MAX_LENGTH }),
     fc.string({ unit: 'binary', minLength: 1, maxLength: NAME_MAX_LENGTH }),
   )
+  .map((s) => s.replace(forbiddenNameChars, 'x'))
   .filter(
     (s) => s.trim() === s && codePoints(s) >= NAME_MIN_LENGTH && codePoints(s) <= NAME_MAX_LENGTH,
   );

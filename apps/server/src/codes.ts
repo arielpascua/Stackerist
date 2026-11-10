@@ -8,11 +8,13 @@ import {
   CLOSE_CODES,
   ERROR_CODES,
   ROOM_CODE_ALPHABET,
+  RECOVERABLE_CLOSE_CODES,
   ROOM_CODE_LENGTH,
   SEAT_TOKEN_BYTES,
   isSeatToken,
   type CloseCodeName,
   type ErrorCode,
+  type RecoverableCloseName,
   type RoomCode,
 } from '@stackerist/protocol';
 
@@ -24,10 +26,18 @@ export const ERR = Object.freeze(Object.fromEntries(ERROR_CODES.map((code) => [c
   readonly [K in ErrorCode]: K;
 };
 
-/** The protocol's close-code names as a name → name map, derived from `CLOSE_CODES`. */
+/** Every close-code name the server sends: `CLOSE_CODES` plus `RECOVERABLE_CLOSE_CODES`. */
+export type AnyCloseName = CloseCodeName | RecoverableCloseName;
+
+/** The protocol's close-code names as a name → name map, derived from both close-code objects. */
 export const CLOSE = Object.freeze(
-  Object.fromEntries(Object.keys(CLOSE_CODES).map((name) => [name, name])),
-) as { readonly [K in CloseCodeName]: K };
+  Object.fromEntries(
+    [...Object.keys(CLOSE_CODES), ...Object.keys(RECOVERABLE_CLOSE_CODES)].map((name) => [
+      name,
+      name,
+    ]),
+  ),
+) as { readonly [K in AnyCloseName]: K };
 
 /** Developer-facing error text. The UI maps the code to DESIGN.md copy and never shows this. */
 export const ERROR_TEXT: Readonly<Record<ErrorCode, string>> = Object.freeze({

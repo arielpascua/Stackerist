@@ -17,6 +17,7 @@ import {
   VIEW_WIDTH,
 } from '../chart.ts';
 import { COPY } from '../copy.ts';
+import { Bdi, withNames } from './Bdi.tsx';
 import { TEST_IDS } from '../testIds.ts';
 
 const PLOT_RIGHT = MARGIN.left + PLOT_WIDTH;
@@ -35,7 +36,7 @@ function Legend({ model }: { readonly model: ChartModel }) {
         <li key={line.key} className="chart__legend-item">
           <span className={`chart__swatch chart__swatch--${line.key}`} aria-hidden="true" />
           <span className="chart__legend-name" title={line.name}>
-            {line.name}
+            <Bdi>{line.name}</Bdi>
           </span>
         </li>
       ))}
@@ -63,9 +64,11 @@ function DataTable({ model }: { readonly model: ChartModel }) {
       <tbody>
         {model.summary.map((line) => (
           <tr key={line.key}>
-            <th scope="row">{line.name}</th>
+            <th scope="row">
+              <Bdi>{line.name}</Bdi>
+            </th>
             {line.sampleCount === 0 ? (
-              <td colSpan={3}>{text.noData(line.name)}</td>
+              <td colSpan={3}>{withNames(text.noData(line.name), [line.name])}</td>
             ) : (
               <>
                 <td>{text.rows(line.peak)}</td>

@@ -14,8 +14,8 @@ import { clientIpConfigFromEnv, type ClientIpConfig } from './clientIp.js';
 import { realClock, type Clock } from './clock.js';
 import { CLOSE } from './codes.js';
 import { DEFAULT_LIMITS, resolvePort, type Limits } from './config.js';
-import { ConnectionHub } from './connection.js';
-import { registerHttp, respondToFrameworkError } from './http.js';
+import { ConnectionHub, isFrameError } from './connection.js';
+import { guardOrigin, registerHttp, respondToFrameworkError } from './http.js';
 import { createLogger, EventLog } from './log.js';
 import { GameLoop } from './loop.js';
 import type { MatchSeeds } from './match.js';
@@ -54,6 +54,8 @@ export interface ServerOptions {
   /** Default clientIpConfigFromEnv(process.env). */
   readonly clientIp?: ClientIpConfig;
   readonly limits?: Partial<Limits>;
+  /** Adds 'unsafe-inline' to the CSP style-src. Default: true unless NODE_ENV=production (the image sets it). */
+  readonly inlineStyles?: boolean;
   /** Never set in production. */
   readonly test?: TestOptions;
 }
@@ -99,6 +101,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
   const host = options.host ?? process.env.HOST ?? '0.0.0.0';
   const clientDist = options.clientDist === undefined ? DEFAULT_CLIENT_DIST : options.clientDist;
   const test = options.test;
+  const inlineStyles = options.inlineStyles ?? process.env.NODE_ENV !== 'production';
 
   // Widen to Fastify's logger interface so the instance type stays the default FastifyInstance.
   const loggerInstance: FastifyBaseLogger = logger;
@@ -106,14 +109,15 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
     loggerInstance,
     logController: new LogController({ disableRequestLogging: true }),
     frameworkErrors: (error, _request, reply) => {
-      respondToFrameworkError(error, reply);
+      respondToFrameworkError(error, reply, inlineStyles);
     },
   });
 
   await app.register(fastifyWebsocket, {
     options: { maxPayload: limits.wsHardMaxPayloadBytes },
     errorHandler: (error, socket) => {
-      log.error('handler.error', {}, error);
+      // A malformed frame is the sender's doing: the hub logs it as a coalesced warning, with no stack (F8).
+      if (!isFrameError(error)) log.error('handler.error', {}, error);
       socket.terminate();
     },
     preClose: (done) => {
@@ -123,7 +127,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
       done();
     },
   });
-  await registerHttp(app, { clientDist, log });
+  await registerHttp(app, { clientDist, log, inlineStyles });
 
   const loop = new GameLoop(clock, {
     manual: test?.manualTick === true,
@@ -140,7 +144,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
   });
   const hub = new ConnectionHub({ clock, log, limits, registry, clientIp, throwOn: test?.throwOn });
 
-  app.get(WS_PATH, { websocket: true }, (socket, request) => {
+  app.get(WS_PATH, { websocket: true, onRequest: guardOrigin }, (socket, request) => {
     safeCall(
       log,
       {},

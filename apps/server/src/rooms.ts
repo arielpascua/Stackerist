@@ -131,14 +131,24 @@ export class Room implements LoopRoom {
   #lastGameOver: GameOverMessage | null = null;
   #emptyTimer: TimerId | null = null;
   #waitingTtlTimer: TimerId | null = null;
+  #ageTimer: TimerId | null = null;
+  #idleTimer: TimerId | null = null;
+  /** Monotonic ms of the last thing a person did in the room (the idle TTL of a finished room, F2). */
+  #lastActivityAt: number;
 
   constructor(code: RoomCode, deps: RoomDeps, onDeleted: (room: Room) => void) {
     this.code = code;
     this.#deps = deps;
     this.#onDeleted = onDeleted;
+    this.#lastActivityAt = deps.clock.monotonicMs();
   }
 
   // ---------------------------------------------------------------- queries
+
+  /** True while at least one player socket is bound (an abandoned room is only on its 2-minute TTL). */
+  hasConnectedPlayer(): boolean {
+    return this.#connectedPlayers() > 0;
+  }
 
   allSeatsConnected(): boolean {
     return this.seats.A?.conn != null && this.seats.B?.conn != null;
@@ -205,6 +215,10 @@ export class Room implements LoopRoom {
     this.#waitingTtlTimer = this.#timer(this.#deps.limits.waitingRoomTtlMs, () => {
       this.#onWaitingTtl();
     });
+    this.#ageTimer = this.#timer(this.#deps.limits.maxRoomAgeMs, () => {
+      this.#ageTimer = null;
+      this.#destroy('MAX_AGE');
+    });
     this.#deps.log.info('room.created', { room: this.code, conn: conn.id, seat: 'A' });
   }
 
@@ -220,6 +234,7 @@ export class Room implements LoopRoom {
 
   /** J3: a spectator (the caller has checked the cap). */
   addSpectator(conn: Connection): void {
+    this.#touch();
     this.spectators.add(conn);
     conn.room = this;
     conn.role = 'spectator';
@@ -233,6 +248,7 @@ export class Room implements LoopRoom {
   rejoin(conn: Connection, seat: Seat): void {
     const slot = this.seats[seat];
     if (slot === null) return;
+    this.#touch();
     const old = slot.conn;
     if (old !== null) {
       old.replaced = true;
@@ -295,6 +311,7 @@ export class Room implements LoopRoom {
   onLeave(conn: Connection): void {
     const role = conn.role;
     if (role === null) return;
+    this.#touch();
     this.#deps.log.info('room.left', { room: this.code, conn: conn.id, seat: role });
     if (role === 'spectator') {
       this.spectators.delete(conn);
@@ -320,6 +337,7 @@ export class Room implements LoopRoom {
   onRematch(seat: Seat): void {
     const slot = this.seats[seat];
     if (slot === null) return;
+    this.#touch();
     slot.ready = true;
     this.#broadcast(this.#rematchStatus());
     const a = this.seats.A;
@@ -344,6 +362,7 @@ export class Room implements LoopRoom {
   onConnectionClosed(conn: Connection): void {
     const role = conn.role;
     if (this.deleted || role === null) return;
+    this.#touch();
     if (role === 'spectator') {
       if (this.spectators.delete(conn)) {
         this.#unbind(conn);
@@ -434,6 +453,7 @@ export class Room implements LoopRoom {
     if (this.series.over) {
       log.info('series.ended', { room: this.code, winner: this.series.winner, reason: 'TWO_WINS' });
     }
+    this.#armIdle();
   }
 
   // ---------------------------------------------------------------- X3 / deletion
@@ -706,6 +726,7 @@ export class Room implements LoopRoom {
     }
     this.#sendRoom();
     log.info('series.ended', { room: this.code, winner, reason });
+    this.#armIdle();
   }
 
   #hold(seat: Seat): void {
@@ -772,6 +793,35 @@ export class Room implements LoopRoom {
       return;
     }
     if (this.status === 'waiting') this.#destroy('WAITING_EXPIRED');
+  }
+
+  /** A person did something in the room: the finished-room idle clock restarts. */
+  #touch(): void {
+    this.#lastActivityAt = this.#deps.clock.monotonicMs();
+  }
+
+  /** F2: the room just reached roundOver or seriesOver. Idle from now unless someone acts. */
+  #armIdle(): void {
+    this.#touch();
+    if (this.#idleTimer !== null) return;
+    this.#idleTimer = this.#timer(this.#deps.limits.idleFinishedRoomTtlMs, () => {
+      this.#onIdle();
+    });
+  }
+
+  /** F2: deleted only while finished and untouched for the whole TTL; otherwise wait out the rest. */
+  #onIdle(): void {
+    this.#idleTimer = null;
+    if (this.deleted || (this.status !== 'roundOver' && this.status !== 'seriesOver')) return;
+    const { clock, limits } = this.#deps;
+    const remaining = this.#lastActivityAt + limits.idleFinishedRoomTtlMs - clock.monotonicMs();
+    if (remaining > 0) {
+      this.#idleTimer = this.#timer(remaining, () => {
+        this.#onIdle();
+      });
+      return;
+    }
+    this.#destroy('IDLE');
   }
 
   // ---------------------------------------------------------------- messages
@@ -976,6 +1026,8 @@ export class Room implements LoopRoom {
       this.#resumeTimer,
       this.#emptyTimer,
       this.#waitingTtlTimer,
+      this.#ageTimer,
+      this.#idleTimer,
     ]) {
       this.#cancelTimer(id);
     }
@@ -983,6 +1035,8 @@ export class Room implements LoopRoom {
     this.#resumeTimer = null;
     this.#emptyTimer = null;
     this.#waitingTtlTimer = null;
+    this.#ageTimer = null;
+    this.#idleTimer = null;
     for (const slot of this.#slots()) {
       this.#cancelTimer(slot.holdTimer);
       this.#cancelTimer(slot.graceTimer);
@@ -995,6 +1049,8 @@ export class Room implements LoopRoom {
 /** Live rooms by canonical code. A room is added only after every create gate has passed. */
 export class RoomRegistry {
   readonly #rooms = new Map<RoomCode, Room>();
+  /** Live rooms per creator IP (F2). Kept in memory only, never logged. */
+  readonly #perIp = new Map<string, Set<Room>>();
   readonly #deps: RoomDeps;
 
   constructor(deps: RoomDeps) {
@@ -1005,22 +1061,43 @@ export class RoomRegistry {
     return this.#rooms.size;
   }
 
+  /**
+   * Rooms the client IP `ip` created that are still in play: not deleted, and with a player socket
+   * bound. A room whose players all left is on its empty-room TTL and no longer holds the IP's slot
+   * (so a family that closes the tab and starts again isn't blocked); it still counts toward the
+   * global cap until it is deleted.
+   */
+  liveRoomsOf(ip: string): number {
+    let live = 0;
+    for (const room of this.#perIp.get(ip) ?? []) if (room.hasConnectedPlayer()) live += 1;
+    return live;
+  }
+
   /** `code` must already be canonical (normalizeRoomCode). */
   get(code: RoomCode): Room | undefined {
     return this.#rooms.get(code);
   }
 
-  create(): Room {
+  /** `ownerIp` is charged one slot while the room is in play (`liveRoomsOf`). */
+  create(ownerIp: string): Room {
     const code = generateRoomCode((c) => this.#rooms.has(c));
     const room = new Room(code, this.#deps, (r) => {
-      if (this.#rooms.get(r.code) === r) this.#rooms.delete(r.code);
+      if (this.#rooms.get(r.code) !== r) return;
+      this.#rooms.delete(r.code);
+      const owned = this.#perIp.get(ownerIp);
+      owned?.delete(r);
+      if (owned?.size === 0) this.#perIp.delete(ownerIp);
     });
     this.#rooms.set(code, room);
+    const owned = this.#perIp.get(ownerIp) ?? new Set<Room>();
+    owned.add(room);
+    this.#perIp.set(ownerIp, owned);
     return room;
   }
 
   shutdown(): void {
     for (const room of this.#rooms.values()) room.shutdown();
     this.#rooms.clear();
+    this.#perIp.clear();
   }
 }

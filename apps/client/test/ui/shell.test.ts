@@ -1,4 +1,9 @@
-import { CLOSE_CODES, ERROR_CODES, type CloseCodeName } from '@stackerist/protocol';
+import {
+  CLOSE_CODES,
+  ERROR_CODES,
+  RECOVERABLE_CLOSE_CODES,
+  type CloseCodeName,
+} from '@stackerist/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   boardOuterPx,
@@ -10,7 +15,7 @@ import {
 } from '../../../../design/tokens/tokens.ts';
 import { COPY } from '../../src/ui/copy.ts';
 import { isApplePlatform, isTouchOnly, KeyboardProof } from '../../src/ui/device.ts';
-import { presentClose, presentError } from '../../src/ui/errors.ts';
+import { presentClose, presentError, presentRecoverableClose } from '../../src/ui/errors.ts';
 import { formatClock, formatTicks, secondsLeft } from '../../src/ui/format.ts';
 import { fitScale, HIT_MIN_PX, legendIsShort, scaledHitMinPx } from '../../src/ui/layout.ts';
 import { rememberState } from '../../src/ui/memory.ts';
@@ -97,6 +102,18 @@ describe('REQ-047 error catalogue: every code has a place, problem and recovery 
     }
     expect(presentClose('PONG_TIMEOUT')).toEqual({ kind: 'connection' });
     expect(presentClose('REPLACED')).toMatchObject({ text: COPY.errors.replaced });
+  });
+
+  it('F1 the recoverable close codes show a reconnect notice, never a fatal plate', () => {
+    expect(presentRecoverableClose(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER)).toEqual({
+      kind: 'connection',
+      text: COPY.errors.slowConnection,
+    });
+    expect(COPY.errors.slowConnection).toMatch(/too slow/);
+    expect(presentRecoverableClose(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER)?.kind).toBe(
+      'connection',
+    );
+    expect(presentRecoverableClose(1006)).toBeNull();
   });
 });
 
