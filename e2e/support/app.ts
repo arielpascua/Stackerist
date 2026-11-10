@@ -40,6 +40,17 @@ export interface PlayerOptions {
 export const DESKTOP = { width: 1280, height: 600 } as const;
 export const MOBILE = { width: 390, height: 844 } as const;
 
+/**
+ * Every context gets its own client address (the server runs with CLIENT_IP_SOURCE=x-real-ip, see
+ * playwright.config.ts), because the server rate-limits creates per client IP (REQ-081: 10 a minute) and a
+ * suite that opens dozens of rooms from one address would trip its own limiter and fail at random.
+ */
+let clientCounter = Math.floor(Math.random() * 60_000);
+function nextClientIp(): string {
+  clientCounter = (clientCounter + 1) % 65_536;
+  return `10.${String(1 + (clientCounter >> 8))}.${String(clientCounter & 255)}.${String(1 + (clientCounter % 250))}`;
+}
+
 export async function newPlayer(
   browser: Browser,
   name: string,
@@ -47,6 +58,7 @@ export async function newPlayer(
 ): Promise<Player> {
   const context = await browser.newContext({
     viewport: options.viewport ?? DESKTOP,
+    extraHTTPHeaders: { 'x-real-ip': nextClientIp() },
     ...(options.reducedMotion === true ? { reducedMotion: 'reduce' as const } : {}),
     ...(options.mobile === true
       ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }

@@ -860,9 +860,9 @@ test.describe('REQ-061/087/088 duel effects', () => {
       expect(calm.ringMax, 'no ring while calm').toBe(0);
       expect(isAlertRed(calm.frame), 'the frame is not red while calm').toBe(false);
 
-      // Both players stack in the middle until their own board is in danger (height >= 16).
-      await stackUntilDanger(a);
-      await stackUntilDanger(b);
+      // Both players stack in the middle at the same time until their own board is in danger
+      // (height >= 16). Concurrent, so neither board keeps falling long before the other arrives.
+      await Promise.all([stackUntilDanger(a), stackUntilDanger(b)]);
       // Each page shows danger on BOTH boards: its own, and the opponent's (public snapshots).
       for (const player of [a, b]) {
         await expect(ownCanvas(player.page)).toHaveAttribute(DATA_HOOKS.danger, 'true');
@@ -871,22 +871,28 @@ test.describe('REQ-061/087/088 duel effects', () => {
         });
       }
 
-      // The frame is red on every board, on both pages.
-      for (const player of [a, b]) {
-        for (const id of [TEST_IDS.game.ownCanvas, TEST_IDS.game.oppCanvas]) {
-          const look = await player.page.evaluate(sampleDangerInPage, { id, ms: 1_200 });
-          console.log(`DANGER ${player.name} ${id}: ${JSON.stringify(look)}`);
-          expect(isAlertRed(look.frame), `${player.name} ${id}: red frame`).toBe(true);
-          expect(look.ringMax, `${player.name} ${id}: ring is drawn`).toBeGreaterThan(0);
-          if (player === a) {
-            // Alice: normal motion. The ring pulses (alpha 1 -> 0.25 over a 900 ms cycle).
-            expect(look.ringMax - look.ringMin, `${id}: ring alpha pulses`).toBeGreaterThan(100);
-          } else {
-            // Bob: reduced motion. The same frame, but a steady ring.
-            expect(look.ringMax - look.ringMin, `${id}: ring alpha is steady`).toBeLessThanOrEqual(
-              2,
-            );
-          }
+      // The frame is red on every board, on both pages; all four sampled at the same time (the
+      // stacks keep growing while the pieces fall, so the window is kept short).
+      const ids = [TEST_IDS.game.ownCanvas, TEST_IDS.game.oppCanvas];
+      const looks = await Promise.all(
+        [a, b].flatMap((player) =>
+          ids.map(async (id) => ({
+            player,
+            id,
+            look: await player.page.evaluate(sampleDangerInPage, { id, ms: 1_100 }),
+          })),
+        ),
+      );
+      for (const { player, id, look } of looks) {
+        console.log(`DANGER ${player.name} ${id}: ${JSON.stringify(look)}`);
+        expect(isAlertRed(look.frame), `${player.name} ${id}: red frame`).toBe(true);
+        expect(look.ringMax, `${player.name} ${id}: ring is drawn`).toBeGreaterThan(0);
+        if (player === a) {
+          // Alice: normal motion. The ring pulses (alpha 1 -> 0.25 over a 900 ms cycle).
+          expect(look.ringMax - look.ringMin, `${id}: ring alpha pulses`).toBeGreaterThan(100);
+        } else {
+          // Bob: reduced motion. The same frame, but a steady ring.
+          expect(look.ringMax - look.ringMin, `${id}: ring alpha is steady`).toBeLessThanOrEqual(2);
         }
       }
       expect(a.problems).toEqual([]);
