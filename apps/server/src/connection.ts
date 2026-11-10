@@ -278,7 +278,9 @@ export class ConnectionHub {
   /** F2: over a socket cap. Say so, close with 1013 (the client backs off and retries), never bind it. */
   #refuse(conn: Connection, socket: WebSocket): void {
     const { clock, log } = this.#deps;
-    log.anticheat('SOCKET_LIMIT', { conn: conn.id });
+    // N3: one shared, coalesced line per second for every refusal: a flood must not write a line, or
+    // add a coalescing entry that every later close has to look at, per socket.
+    log.anticheatShared('SOCKET_LIMIT');
     conn.sendError(ERR.SERVER_BUSY);
     conn.close(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER, CLOSE.TRY_AGAIN_LATER);
     // A flooder won't finish the close handshake: don't let ws wait 30 s for it.
@@ -287,7 +289,6 @@ export class ConnectionHub {
     }, REFUSED_SOCKET_GRACE_MS);
     socket.once('close', () => {
       clock.clearTimeout(killer);
-      log.forgetConn(conn.id);
     });
   }
 
