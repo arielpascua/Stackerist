@@ -1,6 +1,7 @@
 import { createPlayerState, parseBoard, type PlayerState } from '@stackerist/engine';
 import {
   ErrorCodeSchema,
+  RECOVERABLE_CLOSE_CODES,
   Predictor,
   TICK_MS,
   TickEstimator,
@@ -114,9 +115,14 @@ function rig(storage = new MemoryStorage()) {
     events().onStatus('open', null);
     events().onOpen();
   };
-  const drop = (): void => {
+  const drop = (code?: number): void => {
     open = false;
+    if (code !== undefined) events().onDropped?.(code);
     events().onStatus('reconnecting', null);
+  };
+  const closeSocket = (): void => {
+    open = false;
+    events().onStatus('closed', null);
   };
   const receive = (msg: ServerMessage): void => {
     events().onMessage(msg);
@@ -144,6 +150,7 @@ function rig(storage = new MemoryStorage()) {
     estimator,
     openSocket,
     drop,
+    closeSocket,
     receive,
     frame,
     inputs,
@@ -277,6 +284,50 @@ describe('REQ-021 session: token storage and automatic rejoin', () => {
     expect(r.logs).toHaveLength(2);
     r.receive({ type: 'error', code: CODES.ROOM_FULL, message: 'x' });
     expect(r.store.getState().error?.code).toBe(CODES.ROOM_FULL);
+  });
+  it('REQ-021 a slow-consumer or try-again-later close is remembered while the socket reconnects', () => {
+    for (const code of Object.values(RECOVERABLE_CLOSE_CODES)) {
+      const r = rig();
+      r.openSocket();
+      r.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+      expect(r.store.getState().recoverableClose).toBeNull();
+      r.drop(code);
+      expect(r.store.getState()).toMatchObject({
+        connection: 'reconnecting',
+        recoverableClose: code,
+      });
+    }
+  });
+
+  it('REQ-049 the notice survives a failed retry and clears when the rejoin succeeds', () => {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+    r.drop(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER);
+    // The first retry fails with an unnamed 1006: still the same recovery, still the same notice.
+    r.drop(1006);
+    expect(r.store.getState().recoverableClose).toBe(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER);
+    r.openSocket();
+    expect(r.sent.at(-1)).toEqual({ type: 'rejoin', code: CODE, token: TOKEN });
+    expect(r.store.getState().recoverableClose).toBe(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER);
+    r.receive({ type: 'joined', code: CODE, seat: 'A' });
+    expect(r.store.getState().recoverableClose).toBeNull();
+  });
+
+  it('REQ-021 the notice is cleared when the retries run out or the player leaves', () => {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+    r.drop(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER);
+    expect(r.store.getState().recoverableClose).toBe(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER);
+    r.closeSocket();
+    expect(r.store.getState()).toMatchObject({ connection: 'closed', recoverableClose: null });
+    const left = rig();
+    left.openSocket();
+    left.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+    left.drop(RECOVERABLE_CLOSE_CODES.SLOW_CONSUMER);
+    left.store.leave();
+    expect(left.store.getState().recoverableClose).toBeNull();
   });
 });
 

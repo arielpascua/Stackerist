@@ -42,7 +42,7 @@ import {
   type TickEstimator,
 } from '@stackerist/protocol';
 import { clearToken, loadToken, saveToken, type TokenStorage } from '../net/session.ts';
-import type { GameSocketEvents } from '../net/socket.ts';
+import { recoverableCloseCode, type GameSocketEvents } from '../net/socket.ts';
 import type {
   BoardModel,
   ClientState,
@@ -153,6 +153,7 @@ const INITIAL_STATE: ClientState = Object.freeze({
   result: null,
   ready: Object.freeze({ A: false, B: false }),
   rttMs: null,
+  recoverableClose: null,
   error: null,
 });
 
@@ -236,6 +237,9 @@ export class CoreStore implements GameStore, FrameDriver {
       },
       onMessage: (msg) => {
         this.#onMessage(msg);
+      },
+      onDropped: (code) => {
+        this.#onDropped(code);
       },
       onStatus: (status, closedBy) => {
         this.#onStatus(status, closedBy);
@@ -414,10 +418,23 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#request({ type: 'rejoin', code, token }, 'rejoin', code);
   }
 
+  /**
+   * A recoverable close (slow consumer, try again later) is remembered so the UI can say why it is
+   * reconnecting. A later unnamed drop during the same recovery (a failed retry) keeps it.
+   */
+  #onDropped(code: number): void {
+    const recoverableClose = recoverableCloseCode(code);
+    if (recoverableClose !== null && recoverableClose !== this.#state.recoverableClose) {
+      this.#patch({ recoverableClose });
+    }
+  }
+
   #onStatus(connection: ConnectionStatus, closedBy: CloseCodeName | null): void {
     if (connection !== 'open') this.#setLive(false);
-    if (connection !== this.#state.connection || closedBy !== this.#state.closedBy) {
-      this.#patch({ connection, closedBy });
+    // The retries ran out (or the socket was closed on purpose): the notice would be stale.
+    const stale = connection === 'closed' && this.#state.recoverableClose !== null;
+    if (connection !== this.#state.connection || closedBy !== this.#state.closedBy || stale) {
+      this.#patch({ connection, closedBy, ...(stale ? { recoverableClose: null } : {}) });
     }
   }
 
@@ -470,7 +487,15 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#options.predictor.clear();
     this.#lastOwn = null;
     this.#ownMemo = null;
-    this.#patch({ code, role, error: null, closedBy: null, hud: this.#buildHud(role) });
+    // A rejoin is answered by `joined`: the recovery is over, so the slow-connection notice goes.
+    this.#patch({
+      code,
+      role,
+      error: null,
+      closedBy: null,
+      recoverableClose: null,
+      hud: this.#buildHud(role),
+    });
   }
 
   #publishRoom(room: Extract<ServerMessage, { type: 'room' }>): void {
@@ -753,6 +778,7 @@ export class CoreStore implements GameStore, FrameDriver {
       hud: INITIAL_STATE.hud,
       result: null,
       ready: INITIAL_STATE.ready,
+      recoverableClose: null,
     });
   }
 

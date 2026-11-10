@@ -17,7 +17,7 @@ import type { CoreServices } from './game/contract.ts';
 import type { DeviceServices } from './ui/browser.ts';
 import { ConnectionBanner, FatalPlate } from './ui/components/Notices.tsx';
 import { COPY } from './ui/copy.ts';
-import { logHiddenError, presentClose, presentError } from './ui/errors.ts';
+import { logHiddenError, presentClose, presentError, reconnectNotice } from './ui/errors.ts';
 import { useClientState } from './ui/hooks.ts';
 import { intentCode, IntentStore } from './ui/intent.ts';
 import { SessionMemory } from './ui/memory.ts';
@@ -327,6 +327,7 @@ export function App({ services, router, device }: AppProps) {
       {connectionDown && !inLiveMatch ? (
         <ConnectionBanner
           failed={state.connection === 'closed'}
+          reason={reconnectNotice(state)}
           onRetry={retryConnection}
           onHome={goHome}
         />

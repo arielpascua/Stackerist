@@ -164,6 +164,7 @@ export function makeClientState(overrides: Partial<ClientState> = {}): ClientSta
     result: null,
     ready: { A: false, B: false },
     rttMs: null,
+    recoverableClose: null,
     error: null,
     ...overrides,
   };

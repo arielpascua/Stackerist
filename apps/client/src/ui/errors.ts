@@ -4,6 +4,7 @@
  * generic recoverable line; codes only a bug or a cheat can cause are logged, never shown.
  */
 import { RECOVERABLE_CLOSE_CODES, type CloseCodeName, type ErrorCode } from '@stackerist/protocol';
+import type { ClientState } from '../game/contract.ts';
 import { COPY } from './copy.ts';
 import type { IntentKind } from './intent.ts';
 
@@ -104,6 +105,17 @@ export function presentRecoverableClose(code: number): ClosePresentation | null 
     default:
       return null;
   }
+}
+
+/**
+ * The notice to show while the socket is reconnecting after a recoverable close: what went wrong and
+ * that the client is recovering. null when the drop has no particular reason (the generic copy shows).
+ */
+export function reconnectNotice(
+  state: Pick<ClientState, 'connection' | 'recoverableClose'>,
+): string | null {
+  if (state.connection !== 'reconnecting' || state.recoverableClose === null) return null;
+  return presentRecoverableClose(state.recoverableClose)?.text ?? null;
 }
 
 /** Errors that are never shown are still logged for whoever opens the console. */

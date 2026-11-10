@@ -15,6 +15,7 @@
 import type { ActivePiece, Board, PieceKind } from '@stackerist/engine';
 import type {
   CloseCodeName,
+  RECOVERABLE_CLOSE_CODES,
   ErrorCode,
   GameOverMessage,
   LiveStats,
@@ -25,6 +26,9 @@ import type {
 } from '@stackerist/protocol';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
+/** A close code the server sends that the client recovers from on its own (4005, 1013). */
+export type RecoverableCloseCode =
+  (typeof RECOVERABLE_CLOSE_CODES)[keyof typeof RECOVERABLE_CLOSE_CODES];
 export type Role = Seat | 'spectator';
 /** Players: left = self, right = opponent. Spectators: left = A, right = B. */
 export type Side = 'left' | 'right';
@@ -70,6 +74,12 @@ export interface ClientState {
   readonly result: GameOverMessage | null;
   readonly ready: { readonly A: boolean; readonly B: boolean };
   readonly rttMs: number | null;
+  /**
+   * Why the socket is reconnecting, when the server closed it with a recoverable code (slow consumer,
+   * try again later). Set on the drop; cleared when the rejoin succeeds, the retries run out or the
+   * player leaves. The UI shows it only while `connection` is `reconnecting`.
+   */
+  readonly recoverableClose: RecoverableCloseCode | null;
   readonly error: { readonly code: ErrorCode; readonly message: string } | null;
 }
 
