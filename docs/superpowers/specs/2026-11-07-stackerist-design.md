@@ -311,7 +311,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-041: The system must reject any input whose seq is not strictly greater than the last accepted seq for that seat.
 - REQ-042: The system must ignore inputs from spectators and reply error NOT_A_PLAYER.
 - REQ-043: The system must reject inputs sent before the match starts, after game over, or while paused, replying error NOT_PLAYING.
-- REQ-044: The system must trim player names, require 1 to 16 characters, and render names only as text, never through innerHTML.
+- REQ-044: The system must trim player names, require 1 to 16 characters, refuse any name containing a control, format, bidirectional-override or emoji character (including joined, flag, skin-tone and keycap sequences) with an error that names the problem and the fix, and render names only as text inside a bidirectional isolate, never through innerHTML.
 
 ### Protocol
 - REQ-045: The system must define every message in source spec §5, plus the input tick stamp, the ping rtt, the countdown and resumed start tick, the combo field, the snapshot attack and cancel events, the round and series fields, the round report and the gameOver stats in this document, as TypeScript types and zod schemas in packages/protocol shared by client and server, with no use of any.
@@ -390,7 +390,7 @@ named here; how the transparent logo is produced; CI caching; test helper design
 | Q1 | Node version? Source spec says Node 20, which is end-of-life since April 2026. | **Node 24 LTS** in Docker, `engines` and `.node-version` (this machine already runs 24.13). |
 | Q2 | Which Railway region? Lag depends on the distance to the server. | **Southeast Asia (Singapore).** |
 | Q3 | Room-creation flooding (the source spec is silent; the site is public). | One live room per connection; at most 10 creates per minute per IP (counting Railway's proxy hops correctly); a 500-live-room cap answering `error: SERVER_BUSY`. |
-| Q4 | Name filtering for kids' names? | None: names are only seen by people who joined with the private code. Future work. |
+| Q4 | Name filtering for kids' names? | No word filter (names are only seen by people who joined with the private code; future work). **Emoji are refused in names for readability** (Ariel, 2026-11-10), as are control, format and bidi characters (security review F7). |
 | Q5 | Sound effects? | **Music is in** (REQ-089, Ariel 2026-11-07). Other sound effects stay future work. |
 | Q6 | GitHub repo for CI? There is no remote yet. | **Yes: a private GitHub repo**, pushed so the workflow runs there. Railway deploys from this machine. |
 | Q7 | REFERENCE product to beat (design gate). | `tetr.io` — scoped to in-match HUD clarity: reading incoming garbage, combo/attack feedback and the opponent's board at a glance. |
