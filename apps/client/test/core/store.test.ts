@@ -432,6 +432,60 @@ describe('REQ-054 prediction wiring', () => {
     expect(r.store.capturingGameKeys()).toBe(false);
   });
 
+  it('REQ-031 gameOver after a grace expiry clears the pause, so no disconnect overlay survives', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 500);
+    r.frame();
+    r.receive({
+      type: 'paused',
+      seat: 'B',
+      graceEndsAt: SERVER_NOW + 20_000,
+      serverNow: SERVER_NOW,
+      pausesLeft: 2,
+    });
+    expect(r.store.getState().paused).not.toBeNull();
+    r.receive({
+      type: 'gameOver',
+      round: 1,
+      replay: false,
+      winner: 'A',
+      reason: 'OPPONENT_DISCONNECTED',
+      tick: 600,
+      series: {
+        round: 1,
+        replay: false,
+        score: { A: 1, B: 0 },
+        over: true,
+        winner: 'A',
+        endReason: 'OPPONENT_DISCONNECTED',
+        rounds: [],
+      },
+      stats: {},
+      report: {},
+    });
+    expect(r.store.getState().paused).toBeNull();
+    expect(r.store.getState().result).not.toBeNull();
+  });
+
+  it('REQ-050 a room that is over (round or series) never keeps a pause', () => {
+    for (const status of ['roundOver', 'seriesOver'] as const) {
+      const r = rig();
+      const goAt = r.startRound();
+      r.timers.advance(goAt + 500);
+      r.receive({
+        type: 'paused',
+        seat: 'B',
+        graceEndsAt: SERVER_NOW + 20_000,
+        serverNow: SERVER_NOW,
+        pausesLeft: 1,
+      });
+      expect(r.store.getState().paused).not.toBeNull();
+      r.receive({ ...room('playing'), status } as ServerMessage);
+      expect(r.store.getState().paused).toBeNull();
+    }
+  });
+
   it('REQ-054 game keys are captured from the countdown to the round end, for players only', () => {
     const r = rig();
     r.openSocket();

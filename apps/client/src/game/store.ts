@@ -447,7 +447,8 @@ export class CoreStore implements GameStore, FrameDriver {
         break;
       case 'gameOver':
         this.#setLive(false);
-        this.#patch({ result: msg });
+        // A grace expiry forfeits the round while a pause is still recorded: the pause ends with it.
+        this.#patch({ result: msg, paused: null });
         break;
       case 'rematchStatus':
         this.#patch({ ready: { A: msg.A, B: msg.B } });
@@ -474,7 +475,12 @@ export class CoreStore implements GameStore, FrameDriver {
 
   #publishRoom(room: Extract<ServerMessage, { type: 'room' }>): void {
     this.#state = { ...this.#state, room };
-    this.#patch({ hud: this.#buildHud(this.#state.role) });
+    // A finished round or series has no pause (REQ-031: the disconnect overlay never outlives it).
+    const over = room.status === 'roundOver' || room.status === 'seriesOver';
+    this.#patch({
+      hud: this.#buildHud(this.#state.role),
+      ...(over && this.#state.paused !== null ? { paused: null } : {}),
+    });
   }
 
   #onCountdown(msg: CountdownMessage, now: number): void {

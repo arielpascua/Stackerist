@@ -203,7 +203,9 @@ export function Game(props: GameProps) {
   const score = room.series.score;
   const lostConnection = live && state.connection === 'reconnecting';
   const resuming = state.countdown?.kind === 'resume';
-  const paused = state.paused;
+  // Belt and braces for REQ-031: a result, or a gameOver the room status has not caught up with, ends
+  // the pause, so the disconnect overlay and its live region never sit under the result card.
+  const paused = result === null && state.result === null ? state.paused : null;
   const pausedName = paused !== null ? names[paused.seat] : null;
 
   const stageStyle = {
