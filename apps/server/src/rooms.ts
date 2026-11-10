@@ -216,8 +216,7 @@ export class Room implements LoopRoom {
       this.#onWaitingTtl();
     });
     this.#ageTimer = this.#timer(this.#deps.limits.maxRoomAgeMs, () => {
-      this.#ageTimer = null;
-      this.#destroy('MAX_AGE');
+      this.#onMaxAge();
     });
     this.#deps.log.info('room.created', { room: this.code, conn: conn.id, seat: 'A' });
   }
@@ -795,6 +794,26 @@ export class Room implements LoopRoom {
     if (this.status === 'waiting') this.#destroy('WAITING_EXPIRED');
   }
 
+  /**
+   * N5: the room reached the maximum age. A match in progress (countdown, playing, or paused with a
+   * player still connected) is never closed by age: look again shortly, and close once the round is over.
+   * Waiting, roundOver, seriesOver and rooms with no connected player close now.
+   */
+  #onMaxAge(): void {
+    this.#ageTimer = null;
+    if (this.deleted) return;
+    const inProgress =
+      (this.status === 'countdown' || this.status === 'playing' || this.status === 'paused') &&
+      this.hasConnectedPlayer();
+    if (inProgress) {
+      this.#ageTimer = this.#timer(this.#deps.limits.maxRoomAgeRecheckMs, () => {
+        this.#onMaxAge();
+      });
+      return;
+    }
+    this.#destroy('MAX_AGE');
+  }
+
   /** A person did something in the room: the finished-room idle clock restarts. */
   #touch(): void {
     this.#lastActivityAt = this.#deps.clock.monotonicMs();
@@ -1046,11 +1065,20 @@ export class Room implements LoopRoom {
   }
 }
 
+/** One less room under `key`; the entry disappears at zero so the map never grows past the live rooms. */
+function release(counts: Map<string, number>, key: string): void {
+  const left = (counts.get(key) ?? 1) - 1;
+  if (left > 0) counts.set(key, left);
+  else counts.delete(key);
+}
+
 /** Live rooms by canonical code. A room is added only after every create gate has passed. */
 export class RoomRegistry {
   readonly #rooms = new Map<RoomCode, Room>();
-  /** Live rooms per creator IP (F2). Kept in memory only, never logged. */
-  readonly #perIp = new Map<string, Set<Room>>();
+  /** Undeleted rooms per creator IP key (N1). Kept in memory only, never logged. */
+  readonly #perIp = new Map<string, number>();
+  /** Undeleted rooms per creator network key, the IPv6 /48 (N2). */
+  readonly #perNetwork = new Map<string, number>();
   readonly #deps: RoomDeps;
 
   constructor(deps: RoomDeps) {
@@ -1062,15 +1090,17 @@ export class RoomRegistry {
   }
 
   /**
-   * Rooms the client IP `ip` created that are still in play: not deleted, and with a player socket
-   * bound. A room whose players all left is on its empty-room TTL and no longer holds the IP's slot
-   * (so a family that closes the tab and starts again isn't blocked); it still counts toward the
-   * global cap until it is deleted.
+   * Rooms the client key `ip` created and that are not deleted yet, connected players or not (N1). A
+   * room whose players all left stays charged to its creator for its whole 2-minute empty TTL, so
+   * creating and abandoning rooms cannot park more than the cap; the slot returns when it is deleted.
    */
   liveRoomsOf(ip: string): number {
-    let live = 0;
-    for (const room of this.#perIp.get(ip) ?? []) if (room.hasConnectedPlayer()) live += 1;
-    return live;
+    return this.#perIp.get(ip) ?? 0;
+  }
+
+  /** The same for every /64 key inside one network key (the IPv6 /48; for IPv4 the address, N2). */
+  liveRoomsOfNetwork(network: string): number {
+    return this.#perNetwork.get(network) ?? 0;
   }
 
   /** `code` must already be canonical (normalizeRoomCode). */
@@ -1078,20 +1108,18 @@ export class RoomRegistry {
     return this.#rooms.get(code);
   }
 
-  /** `ownerIp` is charged one slot while the room is in play (`liveRoomsOf`). */
-  create(ownerIp: string): Room {
+  /** The creator is charged one slot, on its `ip` key and its `network` key, until the room is deleted. */
+  create(owner: { readonly ip: string; readonly network: string }): Room {
     const code = generateRoomCode((c) => this.#rooms.has(c));
     const room = new Room(code, this.#deps, (r) => {
       if (this.#rooms.get(r.code) !== r) return;
       this.#rooms.delete(r.code);
-      const owned = this.#perIp.get(ownerIp);
-      owned?.delete(r);
-      if (owned?.size === 0) this.#perIp.delete(ownerIp);
+      release(this.#perIp, owner.ip);
+      release(this.#perNetwork, owner.network);
     });
     this.#rooms.set(code, room);
-    const owned = this.#perIp.get(ownerIp) ?? new Set<Room>();
-    owned.add(room);
-    this.#perIp.set(ownerIp, owned);
+    this.#perIp.set(owner.ip, (this.#perIp.get(owner.ip) ?? 0) + 1);
+    this.#perNetwork.set(owner.network, (this.#perNetwork.get(owner.network) ?? 0) + 1);
     return room;
   }
 
@@ -1099,5 +1127,6 @@ export class RoomRegistry {
     for (const room of this.#rooms.values()) room.shutdown();
     this.#rooms.clear();
     this.#perIp.clear();
+    this.#perNetwork.clear();
   }
 }

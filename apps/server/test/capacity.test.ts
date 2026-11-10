@@ -82,7 +82,7 @@ describe('F2 live rooms per client IP', () => {
     await spammer.next('created');
   });
 
-  it('F2 a room releases its slot when it is deleted (waiting TTL) and when its players are gone (disconnect, leave)', async () => {
+  it('F2 a room releases its slot when it is deleted (waiting TTL, empty TTL), never earlier (N1)', async () => {
     h = await startTestServer({
       clientIp: { source: 'x-real-ip' },
       limits: { maxLiveRoomsPerIp: 1, maxCreatesPerIpPerMin: 1000 },
@@ -94,7 +94,7 @@ describe('F2 live rooms per client IP', () => {
     expect(blocked.all('error')[0]?.code).toBe('TOO_MANY_CREATES');
     await h.advance(DEFAULT_LIMITS.waitingRoomTtlMs + 1000);
     await first.waitClose();
-    // 2. the creator disconnects: the room is only on its empty-room TTL, and the slot is free at once
+    // 2. the creator disconnects: N1 the room keeps the slot for its 2-minute empty TTL, then frees it
     const second = await create(IP_1);
     expect(created(second)).toBe(true);
     second.ws.close();
@@ -103,11 +103,15 @@ describe('F2 live rooms per client IP', () => {
       () => h.server.app.websocketServer.clients.size === 1,
       'the server to see the close',
     );
-    // 3. leaving frees it too
+    expect((await create(IP_1)).all('error')[0]?.code).toBe('TOO_MANY_CREATES');
+    await h.advance(DEFAULT_LIMITS.emptyRoomTtlMs + 1000);
+    // 3. leaving: the room is empty, so the slot comes back with the empty TTL as well
     const third = await create(IP_1);
     expect(created(third)).toBe(true);
     third.send({ type: 'leave' });
     await h.settle();
+    expect((await create(IP_1)).all('error')[0]?.code).toBe('TOO_MANY_CREATES');
+    await h.advance(DEFAULT_LIMITS.emptyRoomTtlMs + 1000);
     expect(created(await create(IP_1))).toBe(true);
   });
 });
@@ -211,7 +215,7 @@ describe('F2 finished rooms and room age', () => {
     expect(h.inspect(code).status).toBe('playing');
   });
 
-  it('F2 no room outlives the maximum age, whatever its state, and it frees its owner slot', async () => {
+  it('F2 no room outlives the maximum age once its round is over (N5: never mid-round), and it frees its owner slot', async () => {
     h = await startTestServer({
       clientIp: { source: 'x-real-ip' },
       limits: { ...LIMITS, maxLiveRoomsPerIp: 1 },
@@ -226,6 +230,9 @@ describe('F2 finished rooms and room age', () => {
     await h.advance(LIMITS.maxRoomAgeMs - 5000);
     expect(h.testing.inspect(code)).not.toBeNull();
     await h.advance(6000);
+    expect(h.inspect(code).status).toBe('playing'); // N5: a match in progress outlives the age
+    await hardDropUntilOver(h, code, { A: a });
+    await h.advance(6000); // the age check runs again within maxRoomAgeRecheckMs
     expect(h.testing.inspect(code)).toBeNull();
     expect((await a.waitClose()).code).toBe(CLOSE_CODES.ROOM_CLOSED);
     expect((await b.waitClose()).code).toBe(CLOSE_CODES.ROOM_CLOSED);
@@ -237,9 +244,10 @@ describe('F2 the reviewer scenario (roomcap.mjs): one IP keeps creating and join
   it('F2 the attacker never holds more than the per-IP cap, every room ages out, and a victim IP creates throughout', async () => {
     h = await startTestServer({
       clientIp: { source: 'x-real-ip' },
-      limits: { maxRoomAgeMs: 4 * MINUTE, idleFinishedRoomTtlMs: MINUTE },
+      limits: { ...FAST_INPUTS, maxRoomAgeMs: 4 * MINUTE, idleFinishedRoomTtlMs: MINUTE },
     });
     const attackerRooms: string[] = [];
+    const owners = new Map<string, TestClient>();
     let refused = 0;
     let peak = 0;
     const live = (): number => attackerRooms.filter((c) => h.testing.inspect(c) !== null).length;
@@ -256,6 +264,7 @@ describe('F2 the reviewer scenario (roomcap.mjs): one IP keeps creating and join
         guest.send({ type: 'join', code: reply.code, name: 'y' });
         await guest.next('joined');
         attackerRooms.push(reply.code);
+        owners.set(reply.code, owner);
         peak = Math.max(peak, live());
       }
       expect(created(await create(IP_2))).toBe(true); // the victim, every minute
@@ -263,6 +272,12 @@ describe('F2 the reviewer scenario (roomcap.mjs): one IP keeps creating and join
     }
     expect(peak).toBeLessThanOrEqual(DEFAULT_LIMITS.maxLiveRoomsPerIp);
     expect(refused).toBeGreaterThan(0);
+    // N5: a match in progress is never closed by age, so the rounds end first; then every room goes.
+    for (const [code, owner] of owners) {
+      if (h.testing.inspect(code)?.status === 'playing') {
+        await hardDropUntilOver(h, code, { A: owner });
+      }
+    }
     await h.advance(5 * MINUTE);
     expect(live()).toBe(0); // nothing is held "indefinitely" any more
   });

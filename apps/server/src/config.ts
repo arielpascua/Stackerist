@@ -35,21 +35,35 @@ export interface Limits {
   readonly maxHeightSamples: number;
   /** A socket whose send buffer is above this is closed SLOW_CONSUMER (it rejoins with its token), bytes. */
   readonly maxBufferedBytes: number;
-  /** Live rooms a single client IP (/64 for IPv6) may have created at once (F2). */
+  /**
+   * Rooms a single client IP (/64 for IPv6) may have created and not yet deleted (F2, N1): a room
+   * counts from creation until it is deleted, even with every player disconnected (its 2-minute TTL).
+   */
   readonly maxLiveRoomsPerIp: number;
   /** Open sockets per client IP (F2). */
   readonly maxSocketsPerIp: number;
+  /** Rooms one IPv6 /48 may have created and not yet deleted, over all its /64 keys (N2). */
+  readonly maxLiveRoomsPerNetwork: number;
+  /** Open sockets per IPv6 /48, over all its /64 keys (N2). */
+  readonly maxSocketsPerNetwork: number;
   /** Open sockets per process (F2). */
   readonly maxSockets: number;
   /** A room in roundOver or seriesOver with no activity is deleted after this, ms (F2). */
   readonly idleFinishedRoomTtlMs: number;
-  /** No room outlives this, ms, whatever its state (F2). */
+  /** A room older than this is deleted as soon as no round is in progress (F2, N5), ms. */
   readonly maxRoomAgeMs: number;
+  /** How often an over-age room with a round in progress is checked again, ms (N5). */
+  readonly maxRoomAgeRecheckMs: number;
   /** Non-input message bucket per connection: capacity (F9). */
   readonly nonInputBurst: number;
   /** Non-input message bucket per connection: refill, tokens per second (F9). */
   readonly nonInputRefillPerSec: number;
 }
+
+/** An IPv6 /48 gets this many times a single /64 key's socket and room budget (N2). */
+const NETWORK_FACTOR = 4;
+const MAX_LIVE_ROOMS_PER_IP = 6;
+const MAX_SOCKETS_PER_IP = 40;
 
 export const DEFAULT_LIMITS: Limits = Object.freeze({
   inputBurst: 20,
@@ -67,11 +81,14 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
   wsHardMaxPayloadBytes: 16_384,
   maxHeightSamples: MAX_HEIGHT_SAMPLES,
   maxBufferedBytes: 512 * 1024,
-  maxLiveRoomsPerIp: 6,
-  maxSocketsPerIp: 40,
+  maxLiveRoomsPerIp: MAX_LIVE_ROOMS_PER_IP,
+  maxSocketsPerIp: MAX_SOCKETS_PER_IP,
+  maxLiveRoomsPerNetwork: MAX_LIVE_ROOMS_PER_IP * NETWORK_FACTOR,
+  maxSocketsPerNetwork: MAX_SOCKETS_PER_IP * NETWORK_FACTOR,
   maxSockets: 2000,
   idleFinishedRoomTtlMs: 600_000,
   maxRoomAgeMs: 10_800_000,
+  maxRoomAgeRecheckMs: 5000,
   nonInputBurst: 20,
   nonInputRefillPerSec: 5,
 });

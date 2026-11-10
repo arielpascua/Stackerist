@@ -52,12 +52,20 @@ function ipv6Groups(address: string): number[] {
   return [...front, ...zeros, ...back].map((group) => parseInt(group, 16));
 }
 
+/** The per-client key and the wider network key an address belongs to (equal for IPv4). */
+interface AddressKeys {
+  readonly ip: string;
+  readonly network: string;
+}
+
 /**
- * One key per client network (F3a): IPv4 as is, IPv6 as its /64, because a single home or phone gets a
- * whole /64 and could otherwise mint billions of "different" clients. Every spelling of an address
- * (leading zeros, `::`, case, a zone id, an embedded IPv4 tail) gives the same key.
+ * Two keys per client (F3a, N2): IPv4 as is (the network key is the same address), IPv6 as its /64
+ * (`ip`, because a single home or phone gets a whole /64 and could otherwise mint billions of
+ * "different" clients) and as its /48 (`network`, the usual site allocation: a /56 or /60 delegated
+ * prefix, or a whole /48, would otherwise hold 16 to 65 536 /64 keys with a full budget each). Every
+ * spelling of an address (leading zeros, `::`, case, a zone id, an embedded IPv4 tail) gives the same keys.
  */
-function canonicalIp(raw: string | undefined): string | null {
+function canonicalIp(raw: string | undefined): AddressKeys | null {
   if (raw === undefined) return null;
   let value = raw.trim();
   if (value.toLowerCase().startsWith('::ffff:') && isIP(value.slice(7)) === 4) {
@@ -67,9 +75,12 @@ function canonicalIp(raw: string | undefined): string | null {
   if (zone !== -1) value = value.slice(0, zone);
   const family = isIP(value);
   if (family === 0) return null;
-  if (family === 4) return value;
-  const prefix = ipv6Groups(value).slice(0, 4);
-  return `${prefix.map((group) => group.toString(16)).join(':')}::/64`;
+  if (family === 4) return { ip: value, network: value };
+  const groups = ipv6Groups(value).map((group) => group.toString(16));
+  return {
+    ip: `${groups.slice(0, 4).join(':')}::/64`,
+    network: `${groups.slice(0, 3).join(':')}::/48`,
+  };
 }
 
 function headerValue(headers: IncomingHttpHeaders, name: string): string | undefined {
@@ -79,6 +90,8 @@ function headerValue(headers: IncomingHttpHeaders, name: string): string | undef
 
 export interface ResolvedClientIp {
   readonly ip: string;
+  /** The aggregate key: the IPv6 /48 of `ip` (for IPv4 and "unknown", `ip` itself). */
+  readonly network: string;
   /** False when the configured header was missing or unusable and the socket address stood in (F3c). */
   readonly fromConfiguredSource: boolean;
 }
@@ -89,11 +102,11 @@ type RequestLike = {
 };
 
 export function resolveClientIpDetailed(req: RequestLike, cfg: ClientIpConfig): ResolvedClientIp {
-  const fallback = canonicalIp(req.socket.remoteAddress) ?? UNKNOWN_IP;
-  let fromHeader: string | null = null;
+  const fallback = canonicalIp(req.socket.remoteAddress) ?? { ip: UNKNOWN_IP, network: UNKNOWN_IP };
+  let fromHeader: AddressKeys | null = null;
   switch (cfg.source) {
     case 'socket':
-      return { ip: fallback, fromConfiguredSource: true };
+      return { ...fallback, fromConfiguredSource: true };
     case 'x-real-ip':
       fromHeader = canonicalIp(headerValue(req.headers, 'x-real-ip'));
       break;
@@ -105,7 +118,7 @@ export function resolveClientIpDetailed(req: RequestLike, cfg: ClientIpConfig): 
     default:
       break;
   }
-  return { ip: fromHeader ?? fallback, fromConfiguredSource: fromHeader !== null };
+  return { ...(fromHeader ?? fallback), fromConfiguredSource: fromHeader !== null };
 }
 
 export function resolveClientIp(req: RequestLike, cfg: ClientIpConfig): string {
