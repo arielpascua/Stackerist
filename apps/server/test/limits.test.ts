@@ -38,7 +38,11 @@ describe('REQ-081 flood limits', () => {
   });
 
   it('REQ-081 at most 10 creates per minute per client IP, resolved from X-Real-IP', async () => {
-    h = await startTestServer({ clientIp: { source: 'x-real-ip' } });
+    // The per-IP live-room cap (F2) has its own tests; lift it so this one isolates the per-minute window.
+    h = await startTestServer({
+      clientIp: { source: 'x-real-ip' },
+      limits: { maxLiveRoomsPerIp: 1000 },
+    });
     for (let i = 0; i < DEFAULT_LIMITS.maxCreatesPerIpPerMin; i += 1) {
       expect((await createFrom(IP_1)).all('created')).toHaveLength(1);
     }

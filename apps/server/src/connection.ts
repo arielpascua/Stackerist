@@ -29,7 +29,7 @@ import type { RawData, WebSocket } from 'ws';
 import { resolveClientIp, type ClientIpConfig } from './clientIp.js';
 import type { Clock, TimerId } from './clock.js';
 import { CLOSE, ERR, ERROR_TEXT, type AnyCloseName } from './codes.js';
-import { IP_WINDOW_MS, type Limits } from './config.js';
+import { IP_WINDOW_MS, REFUSED_SOCKET_GRACE_MS, type Limits } from './config.js';
 import type { AnticheatRule, EventLog } from './log.js';
 import { SlidingWindowCounter, TokenBucket } from './rateLimit.js';
 import type { Room, RoomRegistry } from './rooms.js';
@@ -176,6 +176,8 @@ export class ConnectionHub {
   readonly #conns = new Set<Connection>();
   readonly #creates = new SlidingWindowCounter(IP_WINDOW_MS);
   readonly #failedJoins = new SlidingWindowCounter(IP_WINDOW_MS);
+  /** Open sockets per client IP (F2); a refused socket is never counted. */
+  readonly #socketsPerIp = new Map<string, number>();
   #nextId = 1;
   #sweepTimer: TimerId | null = null;
 
@@ -202,7 +204,12 @@ export class ConnectionHub {
       },
     });
     this.#nextId += 1;
+    if (this.#socketsFull(conn.ip)) {
+      this.#refuse(conn, socket);
+      return;
+    }
     this.#conns.add(conn);
+    this.#socketsPerIp.set(conn.ip, (this.#socketsPerIp.get(conn.ip) ?? 0) + 1);
     socket.on('message', (data, isBinary) => {
       this.#onFrame(conn, data, isBinary);
     });
@@ -219,6 +226,30 @@ export class ConnectionHub {
       });
     });
     this.#ping(conn);
+  }
+
+  #socketsFull(ip: string): boolean {
+    const { limits } = this.#deps;
+    return (
+      this.#conns.size >= limits.maxSockets ||
+      (this.#socketsPerIp.get(ip) ?? 0) >= limits.maxSocketsPerIp
+    );
+  }
+
+  /** F2: over a socket cap. Say so, close with 1013 (the client backs off and retries), never bind it. */
+  #refuse(conn: Connection, socket: WebSocket): void {
+    const { clock, log } = this.#deps;
+    log.anticheat('SOCKET_LIMIT', { conn: conn.id });
+    conn.sendError(ERR.SERVER_BUSY);
+    conn.close(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER, CLOSE.TRY_AGAIN_LATER);
+    // A flooder won't finish the close handshake: don't let ws wait 30 s for it.
+    const killer = clock.setTimeout(() => {
+      socket.terminate();
+    }, REFUSED_SOCKET_GRACE_MS);
+    socket.once('close', () => {
+      clock.clearTimeout(killer);
+      log.forgetConn(conn.id);
+    });
   }
 
   /** Shutdown: every socket closes with SERVER_SHUTDOWN (1001). */
@@ -333,12 +364,16 @@ export class ConnectionHub {
       this.#reject(conn, ERR.TOO_MANY_CREATES, 'CREATE_LIMIT');
       return;
     }
+    if (registry.liveRoomsOf(conn.ip) >= limits.maxLiveRoomsPerIp) {
+      this.#reject(conn, ERR.TOO_MANY_CREATES, 'CREATE_LIMIT');
+      return;
+    }
     if (registry.size >= limits.maxLiveRooms) {
       this.#reject(conn, ERR.SERVER_BUSY, ERR.SERVER_BUSY);
       return;
     }
     this.#creates.charge(conn.ip, now);
-    registry.create().start(conn, msg.name);
+    registry.create(conn.ip).start(conn, msg.name);
   }
 
   /** The canonical room for a raw code, or null (malformed codes are "not found", never BAD_MESSAGE). */
@@ -496,7 +531,11 @@ export class ConnectionHub {
   }
 
   #onClose(conn: Connection, code: number): void {
-    this.#conns.delete(conn);
+    if (this.#conns.delete(conn)) {
+      const left = (this.#socketsPerIp.get(conn.ip) ?? 1) - 1;
+      if (left > 0) this.#socketsPerIp.set(conn.ip, left);
+      else this.#socketsPerIp.delete(conn.ip);
+    }
     conn.closing = true;
     conn.stopPing();
     const { log } = this.#deps;

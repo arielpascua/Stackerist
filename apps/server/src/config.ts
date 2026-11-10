@@ -79,6 +79,9 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
 /** Per-IP flood windows, ms (REQ-081: "per minute"). */
 export const IP_WINDOW_MS = 60_000;
 
+/** A refused socket (over a socket cap) that hasn't closed by now is terminated, ms. */
+export const REFUSED_SOCKET_GRACE_MS = 2000;
+
 export const DEFAULT_PORT = 3000;
 
 /** PORT → a TCP port; blank or missing → 3000. Throws on anything that isn't 0..65535. */
