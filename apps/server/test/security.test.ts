@@ -28,8 +28,9 @@ afterEach(async () => {
   server = null;
 });
 
-async function start(): Promise<StackeristServer> {
+async function start(inlineStyles = false): Promise<StackeristServer> {
   server = await createServer({
+    inlineStyles,
     port: 0,
     host: '127.0.0.1',
     clientDist,
@@ -147,6 +148,22 @@ describe('F5 security headers', () => {
       }),
     ).toBe(403);
     expectHardened(refusedHeaders, host);
+  });
+
+  it('F5 style-src is same-origin only unless inlineStyles is on (dev and the e2e probes, never production)', async () => {
+    const strict = await start(false);
+    const csp = String(
+      (await strict.app.inject({ method: 'GET', url: '/' })).headers['content-security-policy'],
+    );
+    expect(csp).toContain("style-src 'self';");
+    expect(csp).not.toContain('unsafe-inline');
+    await strict.close();
+    const relaxed = await start(true);
+    const loose = String(
+      (await relaxed.app.inject({ method: 'GET', url: '/' })).headers['content-security-policy'],
+    );
+    expect(loose).toContain("style-src 'self' 'unsafe-inline';");
+    expect(loose).toMatch(/script-src 'self';/);
   });
 
   it('F5 the wss:// entry follows the request Host, and a hostile Host header cannot inject directives', async () => {

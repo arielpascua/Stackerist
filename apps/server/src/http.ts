@@ -32,7 +32,6 @@ export const BAD_URL_PAGE = `<!doctype html>
 export const CSP_DIRECTIVES = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self'",
   "img-src 'self' data:",
   "font-src 'self'",
   "frame-ancestors 'none'",
@@ -44,17 +43,26 @@ export const CSP_DIRECTIVES = [
 /** A host[:port] we are willing to copy into a header: letters, digits, dots, hyphens, [v6], a port. */
 const SAFE_HOST = /^(?:[a-z0-9-]+(?:.[a-z0-9-]+)*|[[0-9a-f:.]+])(?::d{1,5})?$/i;
 
-export function contentSecurityPolicy(host: string | undefined): string {
+/**
+ * `inlineStyles` adds `'unsafe-inline'` to style-src only. The built client doesn't need it (React's
+ * `style` props and canvas sizing go through the CSSOM), so production never sets it; dev servers and the
+ * e2e probes, which inject `<style>` tags into the page, do.
+ */
+export function contentSecurityPolicy(host: string | undefined, inlineStyles: boolean): string {
   const wss = host !== undefined && SAFE_HOST.test(host) ? ` wss://${host}` : '';
-  return [...CSP_DIRECTIVES, `connect-src 'self'${wss}`].join('; ');
+  const style = inlineStyles ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'";
+  return [...CSP_DIRECTIVES, style, `connect-src 'self'${wss}`].join('; ');
 }
 
 /** F5: the same four headers on every response (pages, assets, health, errors, refusals). */
-export function applySecurityHeaders(reply: FastifyReply): void {
+export function applySecurityHeaders(reply: FastifyReply, inlineStyles: boolean): void {
   void reply
     .header('x-content-type-options', 'nosniff')
     .header('referrer-policy', 'no-referrer')
-    .header('content-security-policy', contentSecurityPolicy(reply.request.headers.host));
+    .header(
+      'content-security-policy',
+      contentSecurityPolicy(reply.request.headers.host, inlineStyles),
+    );
 }
 
 /**
@@ -82,8 +90,12 @@ const ASSET_CACHE = 'public, max-age=31536000, immutable';
 const PAGE_CACHE = 'no-cache';
 
 /** Fastify `frameworkErrors`: a bad URL gets the 400 page; anything else keeps the default handling. */
-export function respondToFrameworkError(error: FastifyError, reply: FastifyReply): void {
-  applySecurityHeaders(reply);
+export function respondToFrameworkError(
+  error: FastifyError,
+  reply: FastifyReply,
+  inlineStyles: boolean,
+): void {
+  applySecurityHeaders(reply, inlineStyles);
   if (error.code === 'FST_ERR_BAD_URL') {
     void reply
       .code(400)
@@ -105,13 +117,17 @@ function statusOf(error: unknown): number {
 
 export async function registerHttp(
   app: FastifyInstance,
-  options: { readonly clientDist: string | null; readonly log: EventLog },
+  options: {
+    readonly clientDist: string | null;
+    readonly log: EventLog;
+    readonly inlineStyles: boolean;
+  },
 ): Promise<void> {
   const { log } = options;
 
   // F5: every response, whichever handler or error path produced it.
   app.addHook('onSend', (_request, reply, payload, done) => {
-    applySecurityHeaders(reply);
+    applySecurityHeaders(reply, options.inlineStyles);
     done(null, payload);
   });
 

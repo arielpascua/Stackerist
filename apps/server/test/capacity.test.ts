@@ -82,32 +82,32 @@ describe('F2 live rooms per client IP', () => {
     await spammer.next('created');
   });
 
-  it('F2 a room that is deleted releases its slot (empty-room TTL, waiting TTL, leave)', async () => {
+  it('F2 a room releases its slot when it is deleted (waiting TTL) and when its players are gone (disconnect, leave)', async () => {
     h = await startTestServer({
       clientIp: { source: 'x-real-ip' },
       limits: { maxLiveRoomsPerIp: 1, maxCreatesPerIpPerMin: 1000 },
     });
-    // 1. the waiting-room TTL
+    // 1. a connected room holds the slot until the waiting-room TTL deletes it
     const first = await create(IP_1);
     expect(created(first)).toBe(true);
+    const blocked = await create(IP_1);
+    expect(blocked.all('error')[0]?.code).toBe('TOO_MANY_CREATES');
     await h.advance(DEFAULT_LIMITS.waitingRoomTtlMs + 1000);
     await first.waitClose();
-    // 2. the creator disconnects and the empty-room TTL deletes the room
+    // 2. the creator disconnects: the room is only on its empty-room TTL, and the slot is free at once
     const second = await create(IP_1);
     expect(created(second)).toBe(true);
     second.ws.close();
     await second.waitClose();
     await until(
-      () => h.server.app.websocketServer.clients.size === 0,
+      () => h.server.app.websocketServer.clients.size === 1,
       'the server to see the close',
     );
-    await h.advance(DEFAULT_LIMITS.emptyRoomTtlMs + 1000);
-    // 3. a fresh create works after each, and leaving + the TTL frees it again
+    // 3. leaving frees it too
     const third = await create(IP_1);
     expect(created(third)).toBe(true);
     third.send({ type: 'leave' });
     await h.settle();
-    await h.advance(DEFAULT_LIMITS.emptyRoomTtlMs + 1000);
     expect(created(await create(IP_1))).toBe(true);
   });
 });

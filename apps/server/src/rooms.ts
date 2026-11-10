@@ -145,6 +145,11 @@ export class Room implements LoopRoom {
 
   // ---------------------------------------------------------------- queries
 
+  /** True while at least one player socket is bound (an abandoned room is only on its 2-minute TTL). */
+  hasConnectedPlayer(): boolean {
+    return this.#connectedPlayers() > 0;
+  }
+
   allSeatsConnected(): boolean {
     return this.seats.A?.conn != null && this.seats.B?.conn != null;
   }
@@ -1045,7 +1050,7 @@ export class Room implements LoopRoom {
 export class RoomRegistry {
   readonly #rooms = new Map<RoomCode, Room>();
   /** Live rooms per creator IP (F2). Kept in memory only, never logged. */
-  readonly #perIp = new Map<string, number>();
+  readonly #perIp = new Map<string, Set<Room>>();
   readonly #deps: RoomDeps;
 
   constructor(deps: RoomDeps) {
@@ -1056,9 +1061,16 @@ export class RoomRegistry {
     return this.#rooms.size;
   }
 
-  /** Live rooms the client IP `ip` created and that have not been deleted. */
+  /**
+   * Rooms the client IP `ip` created that are still in play: not deleted, and with a player socket
+   * bound. A room whose players all left is on its empty-room TTL and no longer holds the IP's slot
+   * (so a family that closes the tab and starts again isn't blocked); it still counts toward the
+   * global cap until it is deleted.
+   */
   liveRoomsOf(ip: string): number {
-    return this.#perIp.get(ip) ?? 0;
+    let live = 0;
+    for (const room of this.#perIp.get(ip) ?? []) if (room.hasConnectedPlayer()) live += 1;
+    return live;
   }
 
   /** `code` must already be canonical (normalizeRoomCode). */
@@ -1066,18 +1078,20 @@ export class RoomRegistry {
     return this.#rooms.get(code);
   }
 
-  /** `ownerIp` is charged one slot until the room is deleted (`liveRoomsOf`). */
+  /** `ownerIp` is charged one slot while the room is in play (`liveRoomsOf`). */
   create(ownerIp: string): Room {
     const code = generateRoomCode((c) => this.#rooms.has(c));
     const room = new Room(code, this.#deps, (r) => {
       if (this.#rooms.get(r.code) !== r) return;
       this.#rooms.delete(r.code);
-      const left = (this.#perIp.get(ownerIp) ?? 1) - 1;
-      if (left > 0) this.#perIp.set(ownerIp, left);
-      else this.#perIp.delete(ownerIp);
+      const owned = this.#perIp.get(ownerIp);
+      owned?.delete(r);
+      if (owned?.size === 0) this.#perIp.delete(ownerIp);
     });
     this.#rooms.set(code, room);
-    this.#perIp.set(ownerIp, (this.#perIp.get(ownerIp) ?? 0) + 1);
+    const owned = this.#perIp.get(ownerIp) ?? new Set<Room>();
+    owned.add(room);
+    this.#perIp.set(ownerIp, owned);
     return room;
   }
 

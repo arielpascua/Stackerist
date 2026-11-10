@@ -54,6 +54,8 @@ export interface ServerOptions {
   /** Default clientIpConfigFromEnv(process.env). */
   readonly clientIp?: ClientIpConfig;
   readonly limits?: Partial<Limits>;
+  /** Adds 'unsafe-inline' to the CSP style-src. Default: true unless NODE_ENV=production (the image sets it). */
+  readonly inlineStyles?: boolean;
   /** Never set in production. */
   readonly test?: TestOptions;
 }
@@ -99,6 +101,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
   const host = options.host ?? process.env.HOST ?? '0.0.0.0';
   const clientDist = options.clientDist === undefined ? DEFAULT_CLIENT_DIST : options.clientDist;
   const test = options.test;
+  const inlineStyles = options.inlineStyles ?? process.env.NODE_ENV !== 'production';
 
   // Widen to Fastify's logger interface so the instance type stays the default FastifyInstance.
   const loggerInstance: FastifyBaseLogger = logger;
@@ -106,7 +109,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
     loggerInstance,
     logController: new LogController({ disableRequestLogging: true }),
     frameworkErrors: (error, _request, reply) => {
-      respondToFrameworkError(error, reply);
+      respondToFrameworkError(error, reply, inlineStyles);
     },
   });
 
@@ -123,7 +126,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Stacker
       done();
     },
   });
-  await registerHttp(app, { clientDist, log });
+  await registerHttp(app, { clientDist, log, inlineStyles });
 
   const loop = new GameLoop(clock, {
     manual: test?.manualTick === true,
