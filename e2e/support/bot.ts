@@ -52,7 +52,10 @@ function land(board: Board, piece: ActivePiece): Landing | null {
   return { board: removeRows(written, rows), lines: rows.length };
 }
 
-function score(landing: Landing): number {
+/** Rows cleared at once -> the score the "attack" stacker gives it: it saves singles up for doubles and more. */
+const ATTACK_LINE_SCORE = [0, 150, 2500, 4000, 6000] as const;
+
+function score(landing: Landing, attack: boolean): number {
   const heights = Array.from({ length: BOARD_WIDTH }, () => 0);
   let holes = 0;
   for (let x = 0; x < BOARD_WIDTH; x += 1) {
@@ -72,7 +75,8 @@ function score(landing: Landing): number {
     bumpiness += Math.abs((heights[x] ?? 0) - (heights[x - 1] ?? 0));
   }
   const total = heights.reduce((sum, h) => sum + h, 0);
-  return landing.lines * 1000 - holes * 60 - total - bumpiness * 3;
+  const cleared = attack ? (ATTACK_LINE_SCORE[landing.lines] ?? 6000) : landing.lines * 1000;
+  return cleared - holes * 60 - total - bumpiness * 3;
 }
 
 export interface Plan {
@@ -82,13 +86,13 @@ export interface Plan {
 }
 
 /** The best rotation and column for a piece at its spawn, or null when nothing fits. */
-export function plan(board: Board, piece: ActivePiece): Plan | null {
+export function plan(board: Board, piece: ActivePiece, attack = false): Plan | null {
   let best: { plan: Plan; value: number } | null = null;
   for (const rotation of ROTATIONS) {
     for (let x = -3; x < BOARD_WIDTH; x += 1) {
       const landing = land(board, { ...piece, rotation, x });
       if (landing === null) continue;
-      const value = score(landing);
+      const value = score(landing, attack);
       if (best === null || value > best.value) {
         best = { plan: { rotation, x, after: landing.board }, value };
       }
@@ -105,24 +109,47 @@ async function readActive(page: Page): Promise<ActivePiece | null> {
 /**
  * Places the falling piece where `plan` says, then hard-drops it and waits for the piece counter to
  * move on. Returns the new locked board, or null when the round is no longer being played.
+ * `options.attack` stacks for doubles and combos (garbage), `options.fast` sends the keys without
+ * pausing between them (the round speeds up as it goes, so a slow stacker loses its piece).
  */
-export async function placeOnePiece(page: Page, board: Board): Promise<Board | null> {
+export interface PlaceOptions {
+  readonly attack?: boolean;
+  readonly fast?: boolean;
+}
+
+export async function placeOnePiece(
+  page: Page,
+  board: Board,
+  options: PlaceOptions = {},
+): Promise<Board | null> {
   const piecesBefore = await ownStat(page, COPY.game.pieces);
   const spawned = await readActive(page);
   if (spawned === null) return null;
-  const target = plan(board, spawned);
+  const target = plan(board, spawned, options.attack === true);
   if (target === null) return null;
 
-  for (let step = 0; step < 24; step += 1) {
-    const current = await readActive(page);
-    if (current?.kind !== spawned.kind) return null;
-    let key: string | null = null;
-    if (current.rotation !== target.rotation) key = 'ArrowUp';
-    else if (current.x < target.x) key = 'ArrowRight';
-    else if (current.x > target.x) key = 'ArrowLeft';
-    if (key === null) break;
-    await page.keyboard.press(key);
-    await sleep(25);
+  if (options.fast === true) {
+    // Rotate, read where the piece ended up (a kick can shift it), slide, drop.
+    const turns = (target.rotation - spawned.rotation + 4) % 4;
+    for (let i = 0; i < turns; i += 1) await page.keyboard.press('ArrowUp');
+    const turned = await readActive(page);
+    if (turned?.kind !== spawned.kind) return null;
+    const shift = target.x - turned.x;
+    for (let i = 0; i < Math.abs(shift); i += 1) {
+      await page.keyboard.press(shift > 0 ? 'ArrowRight' : 'ArrowLeft');
+    }
+  } else {
+    for (let step = 0; step < 24; step += 1) {
+      const current = await readActive(page);
+      if (current?.kind !== spawned.kind) return null;
+      let key: string | null = null;
+      if (current.rotation !== target.rotation) key = 'ArrowUp';
+      else if (current.x < target.x) key = 'ArrowRight';
+      else if (current.x > target.x) key = 'ArrowLeft';
+      if (key === null) break;
+      await page.keyboard.press(key);
+      await sleep(25);
+    }
   }
   await page.keyboard.press('Space');
   for (let i = 0; i < 80; i += 1) {

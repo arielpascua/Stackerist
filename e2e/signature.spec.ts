@@ -28,7 +28,7 @@ import {
   type Player,
 } from './support/app.ts';
 import { placeOnePiece } from './support/bot.ts';
-import { watchFrames } from './support/frames.ts';
+import { watchFrames, type FrameLog } from './support/frames.ts';
 import {
   lastGameOver,
   loseRound,
@@ -768,38 +768,54 @@ test.describe('REQ-061/087/088 duel effects', () => {
     browser,
   }) => {
     test.setTimeout(150_000);
-    const a = await newPlayer(browser, 'Alice');
-    const b = await newPlayer(browser, 'Bob');
-    const framesB = watchFrames(b.page);
+    const opened: Player[] = [];
     try {
-      // Both pages record the fx canvas and Bob's own garbage meter from the first frame on.
-      for (const player of [a, b]) {
-        await player.page.addInitScript(installFxRecorder, {
-          fx: TEST_IDS.game.fxCanvas,
-          meter: TEST_IDS.game.ownMeter,
-          activeHook: DATA_HOOKS.fx,
-          countHook: DATA_HOOKS.projectileCount,
-        });
-      }
-      await startMatch(a, b);
-      await waitUntilLive(a);
-      await waitUntilLive(b);
-      await expect(b.page.getByTestId(TEST_IDS.game.fxCanvas)).toHaveAttribute(
-        DATA_HOOKS.projectileCount,
-        '0',
-      );
+      // The stacker is a greedy bot on a random piece sequence: it nearly always earns a double or a
+      // combo within a few dozen pieces, but not on every seed. A match where it did not is thrown
+      // away and played again (up to three fresh matches), so the test fails only if the product does.
+      let pair: { a: Player; b: Player; framesB: FrameLog; sent: number } | null = null;
+      for (let attempt = 1; pair === null; attempt += 1) {
+        const a = await newPlayer(browser, 'Alice');
+        const b = await newPlayer(browser, 'Bob');
+        opened.push(a, b);
+        const framesB = watchFrames(b.page);
+        // Both pages record the fx canvas and Bob's own garbage meter from the first frame on.
+        for (const player of [a, b]) {
+          await player.page.addInitScript(installFxRecorder, {
+            fx: TEST_IDS.game.fxCanvas,
+            meter: TEST_IDS.game.ownMeter,
+            activeHook: DATA_HOOKS.fx,
+            countHook: DATA_HOOKS.projectileCount,
+          });
+        }
+        await startMatch(a, b);
+        await waitUntilLive(a);
+        await waitUntilLive(b);
+        await expect(b.page.getByTestId(TEST_IDS.game.fxCanvas)).toHaveAttribute(
+          DATA_HOOKS.projectileCount,
+          '0',
+        );
 
-      // Alice stacks with the greedy bot until her Sent counter moves (a double, or a combo).
-      let board: Board = emptyBoard();
-      let placed = 0;
-      for (; placed < 80 && (await ownStat(a.page, COPY.game.sent)) === 0; placed += 1) {
-        const next = await placeOnePiece(a.page, board);
-        if (next === null) break;
-        board = next;
+        // Alice stacks until her Sent counter moves (a double, or a combo); Bob idles.
+        let board: Board = emptyBoard();
+        let placed = 0;
+        for (; placed < 80 && (await ownStat(a.page, COPY.game.sent)) === 0; placed += 1) {
+          const next = await placeOnePiece(a.page, board, { attack: true, fast: true });
+          if (next === null) break;
+          board = next;
+        }
+        const sent = await ownStat(a.page, COPY.game.sent);
+        console.log(
+          `GARBAGE attempt ${String(attempt)}: Alice sent ${String(sent)} after ${String(placed)} pieces`,
+        );
+        if (sent > 0) {
+          pair = { a, b, framesB, sent };
+        } else {
+          expect(attempt, 'the stacker earned no garbage in three fresh matches').toBeLessThan(3);
+          await closeAll([a, b]);
+        }
       }
-      const sent = await ownStat(a.page, COPY.game.sent);
-      console.log(`GARBAGE: Alice sent ${String(sent)} after ${String(placed)} pieces`);
-      expect(sent, `the bot sent no garbage in ${String(placed)} pieces`).toBeGreaterThan(0);
+      const { a, b, framesB } = pair;
 
       // The receiver: a projectile was launched, ran (fx > 0), and is gone again (fx back to 0).
       const fxB = b.page.getByTestId(TEST_IDS.game.fxCanvas);
@@ -834,7 +850,7 @@ test.describe('REQ-061/087/088 duel effects', () => {
       expect(a.problems).toEqual([]);
       expect(b.problems).toEqual([]);
     } finally {
-      await closeAll([a, b]);
+      await closeAll(opened);
     }
   });
 
