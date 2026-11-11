@@ -1002,6 +1002,11 @@ export class Room implements LoopRoom {
         return;
       case 'playing':
         this.#sendSnapshotTo(conn);
+        // A fresh page rejoining a live round has no clock anchor (the old socket never closed, so no
+        // pause and no `resumed`): give a seat one that starts now, so its input goes live (REQ-021).
+        if (match !== null && (conn.role === 'A' || conn.role === 'B')) {
+          conn.send(this.#resumedMessage(match, now, now));
+        }
         return;
       case 'paused':
         this.#sendSnapshotTo(conn);

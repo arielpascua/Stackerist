@@ -317,4 +317,29 @@ describe('disconnect rules', () => {
     await h.settle();
     expect(a2.all('error')).toHaveLength(0);
   });
+
+  it('REQ-035 REQ-021 a rejoin-replace while playing sends the new connection (only) a clock anchor at the current tick', async () => {
+    h = await startTestServer();
+    const { a, b, code, tokenA } = await startDuel(h);
+    h.step(5);
+    const spectator = await h.connect();
+    spectator.send({ type: 'join', code, asSpectator: true });
+    await spectator.next('snapshot');
+    expect(spectator.all('resumed')).toHaveLength(0); // a spectator needs no input clock
+    a.clear();
+    b.clear();
+    spectator.clear();
+    const tick = h.tick(code);
+    const a2 = await rejoin(code, tokenA);
+    await a.waitClose();
+    await a2.next('snapshot');
+    const anchor = await a2.next('resumed');
+    expect(anchor.tick).toBe(tick);
+    expect(anchor.startsAt).toBe(anchor.serverNow);
+    expect(h.inspect(code).status).toBe('playing');
+    await h.settle();
+    expect(b.all('resumed')).toHaveLength(0);
+    expect(spectator.all('resumed')).toHaveLength(0);
+    expect(a.all('resumed')).toHaveLength(0);
+  });
 });

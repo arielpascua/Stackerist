@@ -24,7 +24,9 @@ const CODES = ErrorCodeSchema.enum;
 const SERVER_NOW = 1_700_000_000_000;
 const EMPTY = '..........';
 
-function room(status: 'waiting' | 'countdown' | 'playing' | 'paused'): ServerMessage {
+function room(
+  status: 'waiting' | 'countdown' | 'playing' | 'paused' | 'roundOver' | 'seriesOver',
+): ServerMessage {
   return {
     type: 'room',
     code: CODE,
@@ -648,5 +650,63 @@ describe('REQ-055 store side of the canvas: frames, HUD and effects', () => {
     ]);
     expect(frame.right?.chain).toEqual({ sent: 3, cancelled: 1 });
     expect(r.frame().fx).toEqual([]);
+  });
+});
+
+describe('REQ-021 a fresh page rejoining a live round (F5 after a silent drop)', () => {
+  /** What the server sends a replacing rejoin while `playing`: joined, room, snapshot (and the anchor). */
+  function freshPageRejoin(withAnchor: boolean) {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'joined', code: CODE, seat: 'A', token: TOKEN });
+    r.receive(room('playing'));
+    r.receive(snapshot(120, ownState(120)));
+    r.timers.advance(40);
+    if (withAnchor) {
+      r.receive({ type: 'resumed', startsAt: SERVER_NOW, serverNow: SERVER_NOW, tick: 120 });
+    }
+    return r;
+  }
+
+  it('REQ-021 without any clock anchor the fresh page drops every key (the gate this documents)', () => {
+    const r = freshPageRejoin(false);
+    r.timers.advance(2000);
+    expect(r.frame().inputLive).toBe(false);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs()).toEqual([]);
+  });
+
+  it('REQ-021 the anchor sent with the rejoin snapshot makes input live at once, stamped near the server tick', () => {
+    const r = freshPageRejoin(true);
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    const [input] = r.inputs();
+    expect(input).toMatchObject({ type: 'input', seq: 1, action: { type: 'rotateCW' } });
+    if (input?.type !== 'input') throw new Error('no input');
+    expect(input.tick).toBeGreaterThanOrEqual(120);
+    expect(input.tick).toBeLessThanOrEqual(130);
+  });
+
+  it('REQ-021 the same page reconnecting gets the same anchor and stays playable', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.receive(room('playing'));
+    r.timers.advance(goAt + 500);
+    expect(r.frame().inputLive).toBe(true);
+    r.drop();
+    r.openSocket();
+    r.receive({ type: 'joined', code: CODE, seat: 'A' });
+    r.receive(room('playing'));
+    r.receive(snapshot(150, ownState(150)));
+    r.receive({
+      type: 'resumed',
+      startsAt: SERVER_NOW + 9000,
+      serverNow: SERVER_NOW + 9000,
+      tick: 150,
+    });
+    r.timers.advance(50);
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
   });
 });
