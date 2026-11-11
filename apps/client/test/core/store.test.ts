@@ -13,6 +13,7 @@ import {
   type SnapshotMessage,
 } from '@stackerist/protocol';
 import { describe, expect, it } from 'vitest';
+import { createConductor } from '../../src/audio/conductor.ts';
 import type { FrameModel } from '../../src/game/contract.ts';
 import { frameDriverOf } from '../../src/game/driver.ts';
 import type { GameSocketEvents } from '../../src/net/socket.ts';
@@ -734,5 +735,82 @@ describe('REQ-021 no input while a bind or rejoin request is outstanding', () =>
     r.store.input.keyDown('ArrowUp', false);
     expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
     expect(r.sent.length).toBe(sentBefore + 1);
+  });
+});
+
+describe('REQ-089 REQ-054 a room that is no longer in a round never goes live or plays music', () => {
+  const ENDED = ['seriesOver', 'roundOver', 'waiting'] as const;
+
+  it('REQ-089 the room ending mid-countdown (forfeit, no gameOver) clears the standoff, so DUEL! never goes live', () => {
+    for (const status of ENDED) {
+      const r = rig();
+      const goAt = r.startRound();
+      r.timers.advance(goAt - 1000);
+      r.receive(room(status));
+      expect(r.store.getState().countdown).toBeNull();
+      r.timers.advance(2000);
+      const frame = r.frame();
+      expect(frame.inputLive).toBe(false);
+      expect(frame.standoff).toBeNull();
+      r.store.input.keyDown('ArrowUp', false);
+      expect(r.inputs()).toEqual([]);
+    }
+  });
+
+  it('REQ-089 a stale countdown cannot go live when the room status is already over', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.receive(room('seriesOver'));
+    r.receive({ type: 'countdown', startsAt: SERVER_NOW + 3000, serverNow: SERVER_NOW, tick: 0 });
+    r.timers.advance(goAt + 100);
+    expect(r.frame().inputLive).toBe(false);
+  });
+
+  it('REQ-089 music: none starts for a series-over room, and a playing track stops when the series ends', () => {
+    const calls: string[] = [];
+    const conductor = createConductor({
+      start: () => calls.push('start'),
+      stop: () => calls.push('stop'),
+      setLevel: () => calls.push('level'),
+    });
+    const drive = (r: ReturnType<typeof rig>): void => {
+      conductor.onFrame(r.frame());
+      conductor.onState(r.store.getState());
+    };
+    const quiet = rig();
+    const goAt = quiet.startRound();
+    quiet.receive(room('seriesOver'));
+    quiet.timers.advance(goAt + 500);
+    drive(quiet);
+    expect(calls).not.toContain('start');
+    calls.length = 0;
+
+    const playing = rig();
+    const goAt2 = playing.startRound();
+    playing.timers.advance(goAt2 + 500);
+    drive(playing);
+    expect(calls).toEqual(['start']);
+    playing.receive(room('seriesOver'));
+    drive(playing);
+    expect(calls.filter((call) => call === 'start')).toHaveLength(1);
+    expect(calls.at(-1)).toBe('stop'); // stopping twice (frame and state) is harmless
+  });
+
+  it('REQ-031 the resume countdown (room status paused, no pause recorded) still goes live at its go instant', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 500);
+    r.receive(room('paused'));
+    r.receive({
+      type: 'paused',
+      seat: 'B',
+      graceEndsAt: SERVER_NOW + 20_000,
+      serverNow: SERVER_NOW,
+      pausesLeft: 2,
+    });
+    r.receive({ type: 'resumed', startsAt: SERVER_NOW + 3000, serverNow: SERVER_NOW, tick: 40 });
+    expect(r.frame().inputLive).toBe(false);
+    r.timers.advance(3000);
+    expect(r.frame().inputLive).toBe(true);
   });
 });

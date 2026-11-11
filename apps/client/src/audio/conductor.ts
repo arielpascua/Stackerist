@@ -3,14 +3,18 @@
  *
  * - Starts on the frame where input goes live (`inputLive` flips to true): the same frame that paints DUEL!.
  * - Steps the tempo with the server's speed level, read from the same frames.
- * - Stops when input goes dead (round over, pause, top-out), on game over, a pause and leave, and when the
- *   arena goes away.
+ * - Stops when input goes dead (round over, pause, top-out), on game over, a pause and leave, when the
+ *   room is over or waiting (a forfeit sends no game over), and when the arena goes away.
  */
 import type { ClientState, FrameModel, Music } from '../game/contract.ts';
 
 export interface Conductor {
   onFrame(frame: Pick<FrameModel, 'inputLive' | 'level'>): void;
-  onState(state: Pick<ClientState, 'code' | 'result' | 'paused'>): void;
+  onState(
+    state: Pick<ClientState, 'code' | 'result' | 'paused'> & {
+      readonly room?: Pick<NonNullable<ClientState['room']>, 'status'> | null;
+    },
+  ): void;
   /** The arena unmounted (leave, navigation): nothing is on screen to score. */
   onArenaGone(): void;
 }
@@ -40,7 +44,10 @@ export function createConductor(music: Pick<Music, 'start' | 'stop' | 'setLevel'
       }
     },
     onState(state) {
-      if (state.code === null || state.result !== null || state.paused !== null) stop();
+      const status = state.room?.status;
+      // A series that ends by forfeit (no gameOver) leaves the room over or waiting: nothing to score.
+      const idle = status === 'roundOver' || status === 'seriesOver' || status === 'waiting';
+      if (state.code === null || state.result !== null || state.paused !== null || idle) stop();
     },
     onArenaGone: stop,
   };

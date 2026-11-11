@@ -516,9 +516,13 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#state = { ...this.#state, room };
     // A finished round or series has no pause (REQ-031: the disconnect overlay never outlives it).
     const over = room.status === 'roundOver' || room.status === 'seriesOver';
+    // No round is coming: a forfeit with no `gameOver` (REQ-089) must not leave a countdown that would
+    // go live at its would-be DUEL! instant. The next round's `countdown` message sets a new one.
+    const idle = over || room.status === 'waiting';
     this.#patch({
       hud: this.#buildHud(this.#state.role),
       ...(over && this.#state.paused !== null ? { paused: null } : {}),
+      ...(idle && this.#state.countdown !== null ? { countdown: null } : {}),
     });
   }
 
@@ -658,9 +662,11 @@ export class CoreStore implements GameStore, FrameDriver {
   // ---- Frame models ----
 
   #isLive(nowMs: number): boolean {
-    const { role, connection, countdown, paused, result } = this.#state;
+    const { role, connection, countdown, paused, result, room } = this.#state;
     return (
       isSeat(role) &&
+      // 'paused' is the room status through the resume countdown too; a real pause is `paused !== null`.
+      (room?.status === 'countdown' || room?.status === 'playing' || room?.status === 'paused') &&
       connection === 'open' &&
       this.#bind === null &&
       countdown !== null &&
