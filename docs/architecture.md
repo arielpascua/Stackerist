@@ -1712,7 +1712,7 @@ only the defining files. Also check that `rg -n "#[0-9A-Fa-f]{6}" apps/client/sr
 12. `lastAckSeq` is the buffer head − 1, or the last seen seq when the buffer is empty. Dropped and rejected inputs get acknowledged, so phantom moves don't stay predicted.
 13. The seq space resets on each seat binding and each round. Refresh-rejoin and new rounds work without the client persisting counters.
 14. BAD_TICK doesn't count toward the 20-bad-message kick. Clock drift on an honest client must not disconnect it.
-15. Stamps are monotonic and clamped to `serverTick + 30`. RTT jitter can then never cause BAD_TICK.
+15. Stamps are monotonic and clamped to `serverTick + 30`. RTT jitter can then never cause BAD_TICK. (Known gap, deferred: a server stall long enough to drop 30 or more ticks leaves the client's estimate ahead for about 4 s; see DECISIONS.md.)
 16. The tick estimate is the minimum over 120 snapshot samples plus rtt/2. It recovers after server stalls and leans safely ahead.
 17. The input bucket is charged after the seat and status gates, before the seq, tick and cap checks and the queue. One charge at receipt, and mashing keys before the start can't drain it.
 18. Frames over 1 KB get BAD_MESSAGE from the app; `ws` `maxPayload` closes at 16 KiB. Over-limit frames get an answer, and huge frames are never buffered.

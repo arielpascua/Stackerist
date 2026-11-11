@@ -44,7 +44,7 @@ One line per decision, with the reason. Where the repository records no reason, 
 - **Smart prediction: run-ahead with tick-stamped inputs and no server rewind.** The builder check showed that at level 12 plain prediction lands moves 3 to 5 rows low at 40 to 60 ms of round-trip time; the owner chose this fix.
 - **The client snaps to the re-simulated result on each snapshot, with no smoothing.** The design calls snapping honest.
 - **Hard drop is predicted through the lock on your own board.** It was added to the design after the builder check; no separate reason is recorded.
-- **Stamps are monotonic and clamped to `serverTick + 30`.** Round-trip jitter then can never cause `BAD_TICK` on an honest client.
+- **Stamps are monotonic and clamped to `serverTick + 30`.** Round-trip jitter then cannot cause `BAD_TICK` on an honest client. One case is not covered (found in code review, deferred): the server catches up at most 5 ticks per wake and drops the rest, so after a server stall of roughly 600 ms or more the client's clock estimate stays ahead of the server's tick until the estimator's oldest samples age out (about 4 s), and inputs in that window are refused with `BAD_TICK` and snap back.
 - **`BAD_TICK` does not count toward the 20-bad-message disconnect.** Clock drift on an honest client must not disconnect it.
 - **The tick estimate is the minimum over 120 snapshot samples plus rtt/2.** It recovers after server stalls and leans safely ahead.
 - **`lastAckSeq` is the buffer head minus 1, or the last seen seq when the buffer is empty.** Dropped and rejected inputs get acknowledged too, so phantom moves do not stay predicted.
