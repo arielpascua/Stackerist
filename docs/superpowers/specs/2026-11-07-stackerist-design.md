@@ -311,7 +311,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-041: The system must reject any input whose seq is not strictly greater than the last accepted seq for that seat.
 - REQ-042: The system must ignore inputs from spectators and reply error NOT_A_PLAYER.
 - REQ-043: The system must reject inputs sent before the match starts, after game over, or while paused, replying error NOT_PLAYING.
-- REQ-044: The system must trim player names, require 1 to 16 characters, refuse any name containing a control, format, bidirectional-override or emoji character (including joined, flag, skin-tone and keycap sequences) with an error that names the problem and the fix, and render names only as text inside a bidirectional isolate, never through innerHTML.
+- REQ-044: The system must trim player names, require 1 to 16 characters, normalize names with NFKC, require at least one letter or digit, refuse any name containing a control, format, bidirectional-override, blank-filler, private-use, unassigned or emoji character (including joined, flag, skin-tone and keycap sequences) or three or more consecutive combining marks, with an error that names the problem and the fix, and render names only as text inside a bidirectional isolate, never through innerHTML.
 
 ### Protocol
 - REQ-045: The system must define every message in source spec §5, plus the input tick stamp, the ping rtt, the countdown and resumed start tick, the combo field, the snapshot attack and cancel events, the round and series fields, the round report and the gameOver stats in this document, as TypeScript types and zod schemas in packages/protocol shared by client and server, with no use of any.

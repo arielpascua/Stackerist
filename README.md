@@ -152,8 +152,8 @@ A read-only security review of the server found two availability defects (an unb
 
 - **Origin check.** A browser WebSocket upgrade whose `Origin` host differs from the request's `Host` is refused with 403, so another website cannot drive a visitor's browser into your game. A request with no `Origin` header is allowed, so scripts and tests are not affected: this stops other sites, not scripted cheaters.
 - **Headers on every response:** `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`, `style-src 'self'` in production, `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `connect-src` limited to the site and its own `wss://` host), `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
-- **Per-IP limits.** 10 room creates a minute, 20 failed joins a minute (a rejoin with the correct token is not blocked by this), 6 live rooms, 40 open sockets. IPv6 addresses count per `/64`. A socket over its limit is told `SERVER_BUSY` and closed with code 1013.
-- **Global caps.** 500 live rooms, 2,000 open sockets. A finished room that nobody uses is deleted after 10 minutes, and no room lives longer than 3 hours.
+- **Per-IP limits.** 10 room creates a minute, 20 failed joins a minute (a rejoin with the correct token is not blocked by this), 6 rooms per creator (every room that has not been deleted counts, empty ones included, so creating and abandoning rooms cannot park them), 40 open sockets. IPv6 addresses count per `/64`, and each `/48` also has an aggregate cap of 24 rooms and 160 sockets. A socket over its limit is told `SERVER_BUSY` and closed with code 1013.
+- **Global caps.** 500 live rooms, 2,000 open sockets. A finished room that nobody uses is deleted after 10 minutes, and no room lives longer than 3 hours (a round in progress is never cut off by age; the room closes once it is between rounds).
 - **Per-connection flood limit.** Messages other than inputs (join, leave, rematch, pong) have their own bucket: burst 20, refill 5 a second.
 - **Slow-reader cap.** A socket whose outgoing buffer passes 512 KB is closed with code 4005 (`SLOW_CONSUMER`) and can rejoin with its token. A `pong` only counts as liveness when it answers an outstanding `ping`.
 - **Crash resistance.** Every message handler, timer and room step is wrapped so one bad request cannot take down every live match. Malformed URLs such as `/g/%` get an error page. Logs carry room codes and seat letters, never names, IP addresses or tokens.
@@ -163,11 +163,11 @@ A read-only security review of the server found two availability defects (an unb
 - Covered: forging state, hijacking a seat, replaying or reordering inputs, flooding, oversized or malformed frames, abusing pauses, name-based XSS, cross-site WebSocket use, and exhausting rooms, sockets or memory from one address.
 - Not covered: a determined scripted client can recover its own piece seed (see [Known limitations](#known-limitations)). A bot that reads the screen and plays within the input limits cannot be told apart from a person, and neither can an assistive overlay.
 - Not yet verified on a real host: the per-IP limits rely on the platform overwriting `X-Real-IP` (see [Deploying](#deploying)).
-- The end-to-end suite runs with a relaxed `style-src` that allows inline styles, because its probes inject `<style>` tags. The strict production policy was checked once by hand in a real browser (0 console errors, 2 WebSockets open); the e2e suite does not run under it.
+- Most of the end-to-end suite runs with a relaxed `style-src` that allows inline styles, because its probes inject `<style>` tags. One dedicated spec runs a real match under the strict production policy (see [How the rules are tested](#how-the-rules-are-tested)).
 
 ## How the rules are tested
 
-As of commit `ea243ce` on `build/v1` plus the README tests, `pnpm test` runs 77 test files and 824 tests, all passing. Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests.
+As of commit `465ea42` on `build/v1`, `pnpm test` runs 85 test files and 1,032 tests, all passing (measured 2026-11-11), and GitHub CI is green on that commit. Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests.
 
 | Layer                     | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                 | Where                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -185,11 +185,7 @@ As of commit `ea243ce` on `build/v1` plus the README tests, `pnpm test` runs 77 
 
 **End-to-end suite.** `e2e/*.spec.ts` drives real browsers: create and join by link, play to a result, refresh and rejoin, wrong code, the full room and the eighth and ninth viewer, explicit leave, disconnect, pause and resume, a full best-of-3 with the Next round and New series handshakes, the standoff timing, the report and chart against the server's own numbers, ghost, projectile, danger (and reduced motion), the music button, spectators, and a line clear producing a best-moment panel. One grace-expiry test takes about 40 seconds and only runs with `E2E_SLOW=1`.
 
-Status at commit `ea243ce`, from a run of `pnpm e2e` for this README on 2026-11-10: 45 tests, 40 passed, 4 failed, 1 skipped (the `E2E_SLOW` test). The four failures are in tests and checks that predate the change that wraps every player name in `<bdi>`, or in the phone-width layout, and none concerns the server's rules:
-
-- two tests (`REQ-083` best-of-3 and `REQ-062` spectator) read the series score with a helper in `e2e/support/series.ts` that only reads leaf `p` and `span` elements, so it now drops the names;
-- the geometry probe flags the `<bdi>` name boxes in the standoff at 390 px wide;
-- at 390 px the in-game top bar is wider than the screen, so the Leave and Stop watching buttons sit outside it.
+Status at commit `465ea42`, from a run of `pnpm e2e` on 2026-11-11: 67 tests, 66 passed, 0 failed, 1 skipped (the `E2E_SLOW` test, which passed when run on its own earlier). A separate spec starts its own server with `NODE_ENV=production` and plays a real match under the strict Content-Security-Policy, with no policy violations and no console errors; it fails when the server is not in production mode.
 
 CI does not run the end-to-end suite, so it does not show these. Re-run `pnpm e2e` for the current state.
 
@@ -249,11 +245,11 @@ To try the image locally, `docker build -t stackerist .` then `docker run -p 300
 - **The piece seed is only 31 bits.** The per-round piece seed and garbage-hole seed are 31-bit integers feeding a small PRNG. A determined scripted client can recover its seed in about a minute (the reviewer measured 51.7 seconds after about 15 placements) and then see its **own** future pieces beyond the 5-piece preview, and the columns of the garbage holes it will receive. It reveals nothing about the opponent's board or inputs and cannot change server-authoritative state, so the effect is an information advantage, not forgery. The owner accepted this for now; the remedy is under Future work.
 - **Browser bots and assistive overlays cannot be prevented.** Software that reads the screen and sends legal inputs looks like a person.
 - **Joining your own room from two tabs is allowed.** It is useful for testing and gives no advantage, because each seat still plays by the server's rules.
-- **Phones are not a supported player platform.** The game is keyboard-only. Touch-only devices are warned and offered **Watch instead**. If you do open the result card on a phone it is scaled down to between about 39 % and 54 % of full size and is hard to read, and the in-game top bar is cramped (at 390 px wide the Leave and Stop watching buttons can sit outside the visible bar).
+- **Phones are not a supported player platform.** The game is keyboard-only. Touch-only devices are warned and offered **Watch instead**. If you do open the result card on a phone it is scaled down to between about 39 % and 54 % of full size and is hard to read. The in-game top bar fits a 390 px screen (Music shows as an icon only), but the "joined as spectator" notice collapses to nothing at that width.
 - **The Docker image has never been built with Docker on the development machine.** Its stages were replayed by hand, step by step; the first Railway build is the first real image build.
 - **Per-IP limits depend on the host overwriting `X-Real-IP`.** Not yet verified; see the first-deploy checklist.
 - **The CPU budget was measured on a busy machine.** 3.91 % of one core, passing if any of three 10-second windows is under 5 %. Re-measure on the host.
-- **Names with joined emoji sequences are refused, and the owner has decided to refuse all emoji.** Rejecting invisible format characters also rejects the zero-width joiner, so a family or astronaut emoji is not accepted. On 2026-11-10 the owner decided that every emoji is refused in names, for readability. That change is specified but had not landed in the code at commit `ea243ce`, where a single emoji is still accepted.
+- **Names refuse emoji and look-alike tricks, but not homoglyphs or text symbols reliably.** Emoji presentations, joined sequences, flags, skin tones and keycaps are refused (the owner's decision of 2026-11-10, for readability), as are control, format and direction-changing characters, blank-looking fillers and long stacks of combining marks; names are normalized (NFKC) and need at least one letter or digit. Letters that merely look like others (a Cyrillic "О" in "YОU") are accepted. Whether text-style symbols such as a star, a heart or the copyright sign are accepted depends on the Unicode data of the Node build that runs the server, so do not rely on either.
 - **No name filter.** Names are shown unfiltered to people who joined with the private room code.
 - **No accounts and no persistence, by design.** Rooms live in memory in one process; a restart ends every match.
 
@@ -268,5 +264,3 @@ To try the image locally, `docker build -t stackerist .` then `docker run -p 300
 - "Save best moment as an image"
 - Sound effects beyond the music
 - A 128-bit server-side piece seed, or a crypto-backed bag, to close the seed limitation
-- An end-to-end run under the production Content-Security-Policy
-- Allowing emoji in names safely, if the owner wants them back
