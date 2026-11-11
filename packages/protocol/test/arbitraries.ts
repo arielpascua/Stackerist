@@ -129,13 +129,21 @@ export const codePoints = (s: string): number => Array.from(s).length;
 
 /**
  * What `NameSchema` refuses: control, format and line/paragraph separator characters (F7), and emoji
- * (REQ-044: pictographs, flags, skin tones, variation selectors, the keycap). Built at runtime,
+ * (REQ-044: pictographs, flags, skin tones, variation selectors, the keycap), and (re-review N4)
+ * private-use, unassigned and surrogate code points plus the blank-looking and phrase-sized characters:
+ * Hangul fillers, braille blank, Khmer inherent vowels, U+FDFD and U+FDFC. Built at runtime,
  * independently of the schema's own copy, so no invisible character sits in this file.
  */
 const cp = (...codes: number[]): string => String.fromCodePoint(...codes);
 export const forbiddenNameChars = new RegExp(
   [
     `[\\p{Cc}\\p{Cf}${String.fromCharCode(0x2028, 0x2029)}]`,
+    `[${cp(0x1f000)}-${cp(0x1f2ff)}]`, // the explicit emoji blocks, whatever the Node build knows
+    `[${cp(0x1f300)}-${cp(0x1faff)}]`,
+    '\\p{Co}',
+    '\\p{Cn}',
+    '\\p{Cs}',
+    `[${cp(0x3164)}${cp(0xffa0)}${cp(0x115f)}${cp(0x1160)}${cp(0x2800)}${cp(0x17b4)}${cp(0x17b5)}${cp(0xfdfd)}${cp(0xfdfc)}]`,
     '\\p{Extended_Pictographic}',
     `[${cp(0x1f1e6)}-${cp(0x1f1ff)}]`, // regional indicators (flags)
     `[${cp(0x1f3fb)}-${cp(0x1f3ff)}]`, // skin tones
@@ -146,7 +154,20 @@ export const forbiddenNameChars = new RegExp(
   'gu',
 );
 
-/** Canonical (already trimmed) names of 1..16 code points, including astral characters. */
+/** Every combining mark: the generator keeps them out, so no name has a run of three (N4). */
+export const combiningMarks = /\p{M}/gu;
+/** A letter or a digit: every valid name has one (N4). */
+export const letterOrDigit = /[\p{L}\p{N}]/u;
+
+/**
+ * Canonical names a client may send and a server may echo: already trimmed and NFKC-normalized (the
+ * schema's output is its own input again), 1..16 code points, at least one letter or digit, no refused
+ * character and no combining mark. Includes astral characters. Forbidden characters and marks are
+ * replaced by a letter, the strings are normalized, and the few that normalization still changes or
+ * leaves without a letter are filtered out.
+ */
+const cleaned = (s: string): string =>
+  s.replace(forbiddenNameChars, 'x').replace(combiningMarks, 'x');
 export const nameArb = fc
   .oneof(
     fc.string({ unit: 'grapheme-ascii', minLength: 1, maxLength: NAME_MAX_LENGTH }),
@@ -154,9 +175,14 @@ export const nameArb = fc
     fc.string({ unit: 'binary-ascii', minLength: 1, maxLength: NAME_MAX_LENGTH }),
     fc.string({ unit: 'binary', minLength: 1, maxLength: NAME_MAX_LENGTH }),
   )
-  .map((s) => s.replace(forbiddenNameChars, 'x'))
+  .map((s) => cleaned(cleaned(s).normalize('NFKC')))
   .filter(
-    (s) => s.trim() === s && codePoints(s) >= NAME_MIN_LENGTH && codePoints(s) <= NAME_MAX_LENGTH,
+    (s) =>
+      s.trim() === s &&
+      s.normalize('NFKC') === s &&
+      letterOrDigit.test(s) &&
+      codePoints(s) >= NAME_MIN_LENGTH &&
+      codePoints(s) <= NAME_MAX_LENGTH,
   );
 
 // ---- Game shapes ----

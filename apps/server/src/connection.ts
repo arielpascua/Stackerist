@@ -47,6 +47,8 @@ export interface ConnectionOptions {
 export class Connection {
   readonly id: number;
   readonly ip: string;
+  /** The aggregate network key (IPv6 /48; the address itself for IPv4), for the N2 caps. */
+  readonly network: string;
   readonly #socket: WebSocket;
   room: Room | null = null;
   role: Seat | 'spectator' | null = null;
@@ -65,10 +67,17 @@ export class Connection {
   /** `t` of the pings that may still be answered (at most PONG_TIMEOUT_MS old). */
   #outstandingPings: number[] = [];
 
-  constructor(id: number, socket: WebSocket, ip: string, clock: Clock, options: ConnectionOptions) {
+  constructor(
+    id: number,
+    socket: WebSocket,
+    keys: { readonly ip: string; readonly network: string },
+    clock: Clock,
+    options: ConnectionOptions,
+  ) {
     this.id = id;
     this.#socket = socket;
-    this.ip = ip;
+    this.ip = keys.ip;
+    this.network = keys.network;
     this.#clock = clock;
     this.#options = options;
     this.lastPongAt = clock.monotonicMs();
@@ -188,6 +197,8 @@ export class ConnectionHub {
   readonly #failedJoins = new SlidingWindowCounter(IP_WINDOW_MS);
   /** Open sockets per client IP (F2); a refused socket is never counted. */
   readonly #socketsPerIp = new Map<string, number>();
+  /** Open sockets per IPv6 /48 (N2). */
+  readonly #socketsPerNetwork = new Map<string, number>();
   #nextId = 1;
   #warnedHeaderMissing = false;
   #sweepTimer: TimerId | null = null;
@@ -210,7 +221,7 @@ export class ConnectionHub {
       this.#warnedHeaderMissing = true;
       log.warn('clientip.header_missing');
     }
-    const conn = new Connection(this.#nextId, socket, resolved.ip, clock, {
+    const conn = new Connection(this.#nextId, socket, resolved, clock, {
       maxBufferedBytes: limits.maxBufferedBytes,
       nonInputBurst: limits.nonInputBurst,
       nonInputRefillPerSec: limits.nonInputRefillPerSec,
@@ -221,12 +232,13 @@ export class ConnectionHub {
       },
     });
     this.#nextId += 1;
-    if (this.#socketsFull(conn.ip)) {
+    if (this.#socketsFull(conn)) {
       this.#refuse(conn, socket);
       return;
     }
     this.#conns.add(conn);
     this.#socketsPerIp.set(conn.ip, (this.#socketsPerIp.get(conn.ip) ?? 0) + 1);
+    this.#socketsPerNetwork.set(conn.network, (this.#socketsPerNetwork.get(conn.network) ?? 0) + 1);
     socket.on('message', (data, isBinary) => {
       this.#onFrame(conn, data, isBinary);
     });
@@ -252,18 +264,23 @@ export class ConnectionHub {
     this.#ping(conn);
   }
 
-  #socketsFull(ip: string): boolean {
+  /** The process cap, the per-client cap, and (IPv6 only) the aggregate cap of the client's /48. */
+  #socketsFull(conn: Connection): boolean {
     const { limits } = this.#deps;
     return (
       this.#conns.size >= limits.maxSockets ||
-      (this.#socketsPerIp.get(ip) ?? 0) >= limits.maxSocketsPerIp
+      (this.#socketsPerIp.get(conn.ip) ?? 0) >= limits.maxSocketsPerIp ||
+      (conn.network !== conn.ip &&
+        (this.#socketsPerNetwork.get(conn.network) ?? 0) >= limits.maxSocketsPerNetwork)
     );
   }
 
   /** F2: over a socket cap. Say so, close with 1013 (the client backs off and retries), never bind it. */
   #refuse(conn: Connection, socket: WebSocket): void {
     const { clock, log } = this.#deps;
-    log.anticheat('SOCKET_LIMIT', { conn: conn.id });
+    // N3: one shared, coalesced line per second for every refusal: a flood must not write a line, or
+    // add a coalescing entry that every later close has to look at, per socket.
+    log.anticheatShared('SOCKET_LIMIT');
     conn.sendError(ERR.SERVER_BUSY);
     conn.close(RECOVERABLE_CLOSE_CODES.TRY_AGAIN_LATER, CLOSE.TRY_AGAIN_LATER);
     // A flooder won't finish the close handshake: don't let ws wait 30 s for it.
@@ -272,7 +289,6 @@ export class ConnectionHub {
     }, REFUSED_SOCKET_GRACE_MS);
     socket.once('close', () => {
       clock.clearTimeout(killer);
-      log.forgetConn(conn.id);
     });
   }
 
@@ -395,7 +411,11 @@ export class ConnectionHub {
       this.#reject(conn, ERR.TOO_MANY_CREATES, 'CREATE_LIMIT');
       return;
     }
-    if (registry.liveRoomsOf(conn.ip) >= limits.maxLiveRoomsPerIp) {
+    if (
+      registry.liveRoomsOf(conn.ip) >= limits.maxLiveRoomsPerIp ||
+      (conn.network !== conn.ip &&
+        registry.liveRoomsOfNetwork(conn.network) >= limits.maxLiveRoomsPerNetwork)
+    ) {
       this.#reject(conn, ERR.TOO_MANY_CREATES, 'CREATE_LIMIT');
       return;
     }
@@ -404,7 +424,7 @@ export class ConnectionHub {
       return;
     }
     this.#creates.charge(conn.ip, now);
-    registry.create(conn.ip).start(conn, msg.name);
+    registry.create(conn).start(conn, msg.name);
   }
 
   /** The canonical room for a raw code, or null (malformed codes are "not found", never BAD_MESSAGE). */
@@ -567,6 +587,9 @@ export class ConnectionHub {
       const left = (this.#socketsPerIp.get(conn.ip) ?? 1) - 1;
       if (left > 0) this.#socketsPerIp.set(conn.ip, left);
       else this.#socketsPerIp.delete(conn.ip);
+      const netLeft = (this.#socketsPerNetwork.get(conn.network) ?? 1) - 1;
+      if (netLeft > 0) this.#socketsPerNetwork.set(conn.network, netLeft);
+      else this.#socketsPerNetwork.delete(conn.network);
     }
     conn.closing = true;
     conn.stopPing();

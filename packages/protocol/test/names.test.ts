@@ -88,7 +88,9 @@ describe('F7 NameSchema still accepts ordinary names', () => {
 /**
  * REQ-044 (owner decision, 2026-11-10: "refuse emoji for better name readability"). Every sample is
  * an explicit list built from code points at runtime; none reuses the schema's own pattern.
- * Known, accepted side effect: text-style symbols that Unicode also marks pictographic are refused.
+ * Text-style symbols (a star, a heart suit, a smiley, the copyright, registered and trade mark signs)
+ * are deliberately absent: whether they count as emoji depends on the Unicode data of the Node build
+ * (Node 24.13 refuses them, 24.22 does not), so they are unspecified, see the test at the end.
  */
 const EMOJI_REFUSED: Readonly<Record<string, string>> = {
   'grinning face': ch(0x1f600),
@@ -102,12 +104,6 @@ const EMOJI_REFUSED: Readonly<Record<string, string>> = {
   'red heart with VS16': ch(0x2764, 0xfe0f),
   'a lone variation selector-16': `a${ch(0xfe0f)}b`,
   'a lone variation selector-15': `a${ch(0xfe0e)}b`,
-  'black star': ch(0x2605),
-  'black heart suit': ch(0x2665),
-  'white smiling face': ch(0x263a),
-  copyright: ch(0xa9),
-  registered: ch(0xae),
-  'trade mark': ch(0x2122),
   'emoji at the end': `Sam${ch(0x1f600)}`,
   'emoji at the start': `${ch(0x1f600)}Sam`,
   'emoji in the middle': `Sa${ch(0x1f3ae)}m`,
@@ -159,11 +155,23 @@ describe('REQ-044 NameSchema keeps accepting real names', () => {
   }
 });
 
+describe('REQ-044 text-style symbols are unspecified (they depend on the Node build Unicode data)', () => {
+  it('REQ-044 a star, a heart suit, a smiley, the copyright, registered and trade mark signs, and a bare heart never crash the schema', () => {
+    for (const code of [0x2605, 0x2665, 0x263a, 0xa9, 0xae, 0x2122, 0x2764]) {
+      const name = `Sam${ch(code)}`;
+      expect(typeof NameSchema.safeParse(name).success).toBe('boolean');
+      expect(typeof nameHasEmoji(name)).toBe('boolean');
+    }
+  });
+});
+
 describe('REQ-044 the exported emoji pattern (for the client to pre-validate)', () => {
   it('REQ-044 nameHasEmoji tells an emoji refusal from other refusals', () => {
     expect(nameHasEmoji(ch(0x1f600))).toBe(true);
     expect(nameHasEmoji(`Sam${ch(0x1f600)}`)).toBe(true);
-    expect(nameHasEmoji(ch(0x2605))).toBe(true);
+    expect(nameHasEmoji(ch(0x1f469, 0x200d, 0x1f680))).toBe(true);
+    expect(nameHasEmoji(ch(0x1f1f5, 0x1f1ed))).toBe(true);
+    expect(nameHasEmoji(ch(0x2764, 0xfe0f))).toBe(true); // refused through the variation selector
     expect(nameHasEmoji('Ariel')).toBe(false);
     expect(nameHasEmoji('#1 *')).toBe(false);
     expect(nameHasEmoji(`a${ch(0x202e)}b`)).toBe(false); // a bidi override is refused, but not as emoji

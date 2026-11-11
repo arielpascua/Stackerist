@@ -22,7 +22,6 @@ const REFUSED_FOR_SYMBOLS: Readonly<Record<string, string>> = {
   'skin tone': ch(0x1f44d, 0x1f3fd),
   keycap: ch(0x31, 0xfe0f, 0x20e3),
   'heart with VS16': ch(0x2764, 0xfe0f),
-  star: ch(0x2605),
   'a bidi override': `a${ch(0x202e)}b`,
   'a 17-character name that also has an emoji': `${'a'.repeat(16)}${ch(0x1f600)}`,
 };

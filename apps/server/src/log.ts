@@ -105,10 +105,19 @@ interface CoalesceEntry {
   readonly fields: LogFields;
 }
 
+/** The coalescing entries of one owner (a connection, or the shared bucket), one per rule. */
+type EntryMap = Map<AnticheatRule, CoalesceEntry>;
+
 export class EventLog {
   readonly pino: Logger;
   readonly #clock: Clock;
-  readonly #coalesce = new Map<string, CoalesceEntry>();
+  /**
+   * Coalescing entries indexed by connection (N3): closing a connection touches only its own entries,
+   * never every other connection's, so a flood of closes costs O(closes), not O(closes x entries).
+   */
+  readonly #byConn = new Map<number, EntryMap>();
+  /** Entries not tied to any connection: refusals counted under one key per second (N3). */
+  readonly #shared: EntryMap = new Map();
 
   constructor(logger: Logger, clock: Clock) {
     this.pino = logger;
@@ -136,24 +145,43 @@ export class EventLog {
    * and flushed as one line with `count` when the second ends. Every trigger is counted.
    */
   anticheat(rule: AnticheatRule, fields: LogFields & { readonly conn: number }): void {
-    const key = `${String(fields.conn)}:${rule}`;
+    let entries = this.#byConn.get(fields.conn);
+    if (entries === undefined) {
+      entries = new Map();
+      this.#byConn.set(fields.conn, entries);
+    }
+    this.#record(entries, rule, fields, () => {
+      if (this.#byConn.get(fields.conn)?.size === 0) this.#byConn.delete(fields.conn);
+    });
+  }
+
+  /**
+   * A trigger that has no connection to charge it to (a socket refused before it was bound): one shared
+   * key per rule, so a flood of N refusals is one line per second with `count`, whoever sends it and
+   * however many sockets it opens (N3). Every trigger is counted. Carries no connection id by design.
+   */
+  anticheatShared(rule: AnticheatRule): void {
+    this.#record(this.#shared, rule, {}, () => undefined);
+  }
+
+  #record(entries: EntryMap, rule: AnticheatRule, fields: LogFields, onEmpty: () => void): void {
     const now = this.#clock.monotonicMs();
-    const entry = this.#coalesce.get(key);
+    const entry = entries.get(rule);
     if (entry !== undefined && now - entry.windowStart < COALESCE_MS) {
       entry.suppressed += 1;
       if (entry.timer === null) {
         entry.timer = this.#clock.setTimeout(
           () => {
-            this.#flush(key);
+            this.#flush(entries, rule, onEmpty);
           },
           entry.windowStart + COALESCE_MS - now,
         );
       }
       return;
     }
-    if (entry !== undefined) this.#flush(key);
+    if (entry !== undefined) this.#flush(entries, rule, onEmpty);
     this.pino.warn({ ...fields, event: 'anticheat', rule, count: 1 });
-    this.#coalesce.set(key, {
+    entries.set(rule, {
       windowStart: now,
       suppressed: 0,
       timer: null,
@@ -161,26 +189,28 @@ export class EventLog {
     });
   }
 
-  #flush(key: string): void {
-    const entry = this.#coalesce.get(key);
+  #flush(entries: EntryMap, rule: AnticheatRule, onEmpty: () => void): void {
+    const entry = entries.get(rule);
     if (entry === undefined) return;
-    this.#coalesce.delete(key);
+    entries.delete(rule);
     if (entry.timer !== null) this.#clock.clearTimeout(entry.timer);
     if (entry.suppressed > 0) {
       this.pino.warn({ ...entry.fields, event: 'anticheat', count: entry.suppressed });
     }
+    onEmpty();
   }
 
-  /** Flushes and forgets every coalescing entry of a closed connection. */
+  /** Flushes and forgets every coalescing entry of a closed connection: O(that connection's entries). */
   forgetConn(conn: number): void {
-    const prefix = `${String(conn)}:`;
-    for (const key of [...this.#coalesce.keys()]) {
-      if (key.startsWith(prefix)) this.#flush(key);
-    }
+    const entries = this.#byConn.get(conn);
+    if (entries === undefined) return;
+    for (const rule of [...entries.keys()]) this.#flush(entries, rule, () => undefined);
+    this.#byConn.delete(conn);
   }
 
   /** Flushes everything (shutdown). */
   flushAll(): void {
-    for (const key of [...this.#coalesce.keys()]) this.#flush(key);
+    for (const conn of [...this.#byConn.keys()]) this.forgetConn(conn);
+    for (const rule of [...this.#shared.keys()]) this.#flush(this.#shared, rule, () => undefined);
   }
 }
