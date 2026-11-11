@@ -171,14 +171,36 @@ describe('mutation gaps: seats and leaving (REQ-029, REQ-048)', () => {
     watcher.send({ type: 'join', code, asSpectator: true });
     await watcher.next('joined');
     await a.waitFor((m) => m.type === 'room' && m.spectators === 1, 'one spectator');
-    a.clear();
+    const mark = a.mark(); // only messages after the leave count
     watcher.send({ type: 'leave' });
     await until(() => server().inspect(code).spectators === 0, 'the spectator to be removed');
-    await a.waitFor((m) => m.type === 'room' && m.spectators === 0, 'the count to drop to 0');
+    await until(
+      () => a.received.slice(mark).some((m) => m.type === 'room' && m.spectators === 0),
+      'a room message with 0 spectators',
+    );
     // The leaver is unbound: it can join again.
     watcher.send({ type: 'join', code, asSpectator: true });
     await watcher.next('joined');
     expect(server().inspect(code).spectators).toBe(1);
+  });
+});
+
+describe('mutation gaps: finished-room idle clock (F2)', () => {
+  it('F2 a spectator leaving a finished room counts as activity and restarts the idle clock', async () => {
+    h = await startTestServer({ limits: { inputBurst: 100_000 } });
+    const { a, code } = await startDuel(server());
+    const watcher = await server().connect();
+    watcher.send({ type: 'join', code, asSpectator: true });
+    await watcher.next('joined');
+    await hardDropUntilOver(server(), code, { A: a });
+    const ttl = DEFAULT_LIMITS.idleFinishedRoomTtlMs;
+    await server().advance(ttl - 20_000);
+    watcher.send({ type: 'leave' }); // someone acted: the clock restarts here
+    await until(() => server().inspect(code).spectators === 0, 'the spectator to leave');
+    await server().advance(40_000); // past the original deadline
+    expect(server().testing.inspect(code)).not.toBeNull();
+    await server().advance(ttl); // a full TTL after the leave
+    expect(server().testing.inspect(code)).toBeNull();
   });
 });
 
