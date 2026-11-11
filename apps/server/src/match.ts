@@ -14,6 +14,7 @@ import {
   HEIGHT_SAMPLE_EVERY_TICKS,
   MAX_INPUT_LEAD_TICKS,
   MAX_SNAPSHOT_EVENTS,
+  otherSeat,
   SNAPSHOT_EVERY_TICKS,
   toPlayerStats,
   type PlayerStats,
@@ -36,7 +37,6 @@ import {
 } from '@stackerist/engine';
 import type { Limits } from './config.js';
 import { TokenBucket } from './rateLimit.js';
-import { otherSeat } from './series.js';
 
 export interface MatchSeeds {
   readonly pieceSeed: number;

@@ -68,6 +68,11 @@ export const SeatSchema = z.enum(['A', 'B']);
 /** A seated player or a spectator (the `joined.seat` field). */
 export const RoleSchema = z.enum([...SeatSchema.options, 'spectator']);
 
+/** The other seat of a match. */
+export function otherSeat(seat: z.infer<typeof SeatSchema>): z.infer<typeof SeatSchema> {
+  return seat === 'A' ? 'B' : 'A';
+}
+
 const ROOM_CODE_PATTERN = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${String(ROOM_CODE_LENGTH)}}$`, 'i');
 /**
  * The one room-code validator (REQ-020). Trims, accepts the 31-character alphabet in either case at
@@ -205,6 +210,13 @@ export const RoomStatusSchema = z.enum([
   'roundOver',
   'seriesOver',
 ]);
+/**
+ * A round is on: the standoff, play, or a pause (room status `paused` also covers the resume countdown).
+ * Every other status (`waiting`, `roundOver`, `seriesOver`) has nothing live to play or score.
+ */
+export function isLiveStatus(status: z.infer<typeof RoomStatusSchema>): boolean {
+  return status === 'countdown' || status === 'playing' || status === 'paused';
+}
 export const GameOverReasonSchema = z.enum([
   'TOP_OUT',
   'OPPONENT_LEFT',

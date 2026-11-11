@@ -137,7 +137,7 @@ export class InputController {
       return;
     }
     if (!this.#downHeld) this.#stopSoftDropIfOwed();
-    if (this.#restartSoftDrop && this.#downHeld) {
+    if (this.#restartSoftDrop) {
       this.#softDropOn = true;
       this.#emit({ type: 'softDropStart' });
     }

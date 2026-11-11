@@ -5,6 +5,7 @@
  */
 import {
   MAX_ROUND_SUMMARIES,
+  otherSeat,
   SERIES_WINS_NEEDED,
   type GameOverReason,
   type RoundSummary,
@@ -24,10 +25,6 @@ export interface SeriesState {
 }
 
 export type ForfeitReason = 'OPPONENT_LEFT' | 'OPPONENT_DISCONNECTED';
-
-export function otherSeat(seat: Seat): Seat {
-  return seat === 'A' ? 'B' : 'A';
-}
 
 /** Round 1, 0–0. */
 export function newSeries(): SeriesState {

@@ -3,7 +3,7 @@
  * store's state, and the connection-level notices. CORE arrives by injection (`CoreServices`), typed
  * by `game/contract.ts`; nothing here imports a concrete CORE module.
  */
-import type { RoomCode, RoomStatus, Seat } from '@stackerist/protocol';
+import { isLiveStatus, otherSeat, type RoomCode, type Seat } from '@stackerist/protocol';
 import {
   type ReactNode,
   useCallback,
@@ -21,7 +21,7 @@ import { logHiddenError, presentClose, presentError, reconnectNotice } from './u
 import { useClientState } from './ui/hooks.ts';
 import { intentCode, IntentStore } from './ui/intent.ts';
 import { SessionMemory } from './ui/memory.ts';
-import { deriveResult, deriveSeriesEnd, otherSeat, type SeatNames } from './ui/result.ts';
+import { deriveResult, deriveSeriesEnd, type SeatNames } from './ui/result.ts';
 import { parseRoute, roomPath, type Router, splitLocation } from './ui/router.ts';
 import { Game } from './ui/screens/Game.tsx';
 import { Home, type HomeBusy } from './ui/screens/Home.tsx';
@@ -32,8 +32,6 @@ export interface AppProps {
   readonly router: Router;
   readonly device: DeviceServices;
 }
-
-const LIVE_STATUSES: ReadonlySet<RoomStatus> = new Set(['countdown', 'playing', 'paused']);
 
 export function App({ services, router, device }: AppProps) {
   const { store, music } = services;
@@ -201,7 +199,7 @@ export function App({ services, router, device }: AppProps) {
 
   const closeView =
     state.connection === 'closed' && state.closedBy !== null ? presentClose(state.closedBy) : null;
-  const inLiveMatch = seated && status !== null && LIVE_STATUSES.has(status);
+  const inLiveMatch = seated && status !== null && isLiveStatus(status);
   const connectionDown =
     state.connection === 'reconnecting' ||
     (state.connection === 'closed' && remembered.everOpen && closeView?.kind !== 'fatal');

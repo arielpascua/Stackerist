@@ -90,7 +90,7 @@ describe('mutation gaps: wire shapes', () => {
       '.........t', // lowercase piece letter
       '......... ', // a space
       '.........!',
-      '.........S'.replace('S', 'Q'),
+      '.........Q',
       '.........', // 9 characters
       '...........', // 11 characters
       '',

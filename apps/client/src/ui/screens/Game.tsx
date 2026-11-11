@@ -4,7 +4,13 @@
  * ping and Leave. CORE draws boards, meters, previews and fx into the canvases mounted here; UI paints
  * the per-frame DOM (combo banner, countdown, clock) from `subscribeFrame`.
  */
-import { GRACE_MS, type RoomMessage, type Seat } from '@stackerist/protocol';
+import {
+  GRACE_MS,
+  isLiveStatus,
+  otherSeat,
+  type RoomMessage,
+  type Seat,
+} from '@stackerist/protocol';
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { computeCellSizes, motion } from '../../../../../design/tokens/tokens.ts';
 import type { ClientState, CoreServices, Role, StandoffPhase } from '../../game/contract.ts';
@@ -17,7 +23,7 @@ import { reconnectNotice } from '../errors.ts';
 import { useFitScale, useReducedMotion, useViewport } from '../hooks.ts';
 import { arenaCellSizes } from '../../render/geometry.ts';
 import { COMBO_BANNER_CLEAR_COLUMN, legendIsShort } from '../layout.ts';
-import { otherSeat, type ResultView, type SeatNames } from '../result.ts';
+import type { ResultView, SeatNames } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
 import { paintBanner, paintClock, paintCountdown } from './game/framePaint.ts';
 import { Legend, PlayerColumn, Ping, VsColumn } from './game/Hud.tsx';
@@ -40,12 +46,6 @@ export interface GameProps {
   /** Try again on the lost-connection overlay once reconnecting has given up. */
   readonly onRetry: () => void;
 }
-
-const LIVE_STATUSES: ReadonlySet<RoomMessage['status']> = new Set([
-  'countdown',
-  'playing',
-  'paused',
-]);
 
 function bannerTiming(reducedMotion: boolean): BannerTiming {
   return reducedMotion
@@ -183,7 +183,7 @@ export function Game(props: GameProps) {
     if (status === 'countdown') surfaceRef.current?.focus({ preventScroll: true });
   }, [status]);
 
-  const live = LIVE_STATUSES.has(status);
+  const live = isLiveStatus(status);
   const showResult = result !== null && !live;
 
   // Esc opens the Leave confirm (players only; spectators use Stop watching).

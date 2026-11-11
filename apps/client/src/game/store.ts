@@ -21,6 +21,7 @@ import {
 } from '@stackerist/engine';
 import {
   ErrorCodeSchema,
+  isLiveStatus,
   normalizeRoomCode,
   TICK_MS,
   toLocalMs,
@@ -331,7 +332,7 @@ export class CoreStore implements GameStore, FrameDriver {
     const { role, room, result, connection } = this.#state;
     // Reconnecting has given up: the overlay's Try again and Back to home buttons need Space and Enter.
     if (!isSeat(role) || room === null || result !== null || connection === 'closed') return false;
-    return room.status === 'countdown' || room.status === 'playing' || room.status === 'paused';
+    return isLiveStatus(room.status);
   }
 
   role(): Role | null {
@@ -665,7 +666,8 @@ export class CoreStore implements GameStore, FrameDriver {
     return (
       isSeat(role) &&
       // 'paused' is the room status through the resume countdown too; a real pause is `paused !== null`.
-      (room?.status === 'countdown' || room?.status === 'playing' || room?.status === 'paused') &&
+      room !== null &&
+      isLiveStatus(room.status) &&
       connection === 'open' &&
       this.#bind === null &&
       countdown !== null &&

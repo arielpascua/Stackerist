@@ -4,7 +4,7 @@
  * tokens; nothing here reads a clock.
  */
 import { stackHeight, type Board } from '@stackerist/engine';
-import { COUNTDOWN_MS, type Seat } from '@stackerist/protocol';
+import { COUNTDOWN_MS, otherSeat, type Seat } from '@stackerist/protocol';
 import { danger, motion } from '../../../../design/tokens/tokens.ts';
 import type { CountdownInfo, Role, StandoffPhase } from './contract.ts';
 
@@ -38,10 +38,6 @@ export function standoffPhase(
 /** REQ-088's condition: stack height + pending garbage ≥ the danger threshold (rows). */
 export function isDanger(board: Board, pendingRows: number): boolean {
   return stackHeight(board) + pendingRows >= danger.rows;
-}
-
-export function otherSeat(seat: Seat): Seat {
-  return seat === 'A' ? 'B' : 'A';
 }
 
 /** [left, right] seats: players see themselves on the left; spectators see A left and B right. */

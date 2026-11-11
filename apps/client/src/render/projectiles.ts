@@ -3,8 +3,8 @@
  * times and board positions are passed in, and the result is a list of draw ops for the fx canvas, so the
  * flight, the landing and the burst are tested without a canvas.
  *
- * Visual only. Each effect is started by one snapshot `attack` or `cancel` event (already de-duplicated by
- * the store) and nothing here is waited on by input, state or the meters, which follow snapshot truth.
+ * Visual only. Each effect is started by one snapshot `attack` or `cancel` event (each event is carried by
+ * exactly one snapshot) and nothing here is waited on by input, state or the meters, which follow snapshot truth.
  *
  * - Projectile: an amber, skewed, bevelled square of `projectileSizePx(rows)` flies from the sender's board
  *   (centre column, the cleared row's height, else mid-board) to the receiver's meter at its current fill

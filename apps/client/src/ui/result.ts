@@ -4,13 +4,14 @@
  * state is unit-tested without a DOM.
  */
 import { TICK_RATE } from '@stackerist/engine';
-import type {
-  GameOverMessage,
-  PlayerStats,
-  RoomStatus,
-  Seat,
-  SeriesView,
-  WireBestMoment,
+import {
+  otherSeat,
+  type GameOverMessage,
+  type PlayerStats,
+  type RoomStatus,
+  type Seat,
+  type SeriesView,
+  type WireBestMoment,
 } from '@stackerist/protocol';
 import type { Role } from '../game/contract.ts';
 import { buildChart, type ChartModel } from './chart.ts';
@@ -93,10 +94,6 @@ export interface ResultInput {
   readonly opponentSeated: boolean | null;
   readonly opponentConnected: boolean | null;
   readonly roundStartTick: number | null;
-}
-
-export function otherSeat(seat: Seat): Seat {
-  return seat === 'A' ? 'B' : 'A';
 }
 
 /** Ticks from the round's first tick to `tick`; falls back to the report's duration. */

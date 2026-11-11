@@ -6,6 +6,7 @@
  * - Stops when input goes dead (round over, pause, top-out), on game over, a pause and leave, when the
  *   room is over or waiting (a forfeit sends no game over), and when the arena goes away.
  */
+import { isLiveStatus } from '@stackerist/protocol';
 import type { ClientState, FrameModel, Music } from '../game/contract.ts';
 
 export interface Conductor {
@@ -46,7 +47,7 @@ export function createConductor(music: Pick<Music, 'start' | 'stop' | 'setLevel'
     onState(state) {
       const status = state.room?.status;
       // A series that ends by forfeit (no gameOver) leaves the room over or waiting: nothing to score.
-      const idle = status === 'roundOver' || status === 'seriesOver' || status === 'waiting';
+      const idle = status !== undefined && !isLiveStatus(status);
       if (state.code === null || state.result !== null || state.paused !== null || idle) stop();
     },
     onArenaGone: stop,

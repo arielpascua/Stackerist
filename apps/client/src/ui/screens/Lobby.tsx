@@ -2,7 +2,13 @@
  * Lobby (REQ-048; DESIGN.md "Lobby"): the big room code, the share link with Copy link → "Copied!",
  * the series line, the player list with the waiting seat, and Leave.
  */
-import { type RoomCode, type RoomMessage, type Seat, shareUrl } from '@stackerist/protocol';
+import {
+  otherSeat,
+  type RoomCode,
+  type RoomMessage,
+  type Seat,
+  shareUrl,
+} from '@stackerist/protocol';
 import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from '../../../../../design/tokens/tokens.ts';
 import type { Music, Role } from '../../game/contract.ts';
@@ -13,7 +19,6 @@ import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
 import type { ErrorPresentation } from '../errors.ts';
 import type { SeatNames } from '../result.ts';
-import { otherSeat } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
 
 export interface LobbyProps {
