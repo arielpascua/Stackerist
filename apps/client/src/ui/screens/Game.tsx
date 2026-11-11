@@ -15,7 +15,8 @@ import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
 import { reconnectNotice } from '../errors.ts';
 import { useFitScale, useReducedMotion, useViewport } from '../hooks.ts';
-import { legendIsShort } from '../layout.ts';
+import { arenaCellSizes } from '../../render/geometry.ts';
+import { COMBO_BANNER_CLEAR_COLUMN, legendIsShort } from '../layout.ts';
 import { otherSeat, type ResultView, type SeatNames } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
 import { paintBanner, paintClock, paintCountdown } from './game/framePaint.ts';
@@ -73,6 +74,12 @@ export function Game(props: GameProps) {
   const cells = useMemo(
     () => computeCellSizes(viewport.width, viewport.height),
     [viewport.width, viewport.height],
+  );
+
+  // The canvases' real pitch (spectators draw both boards at the own size): the combo banner anchors to it.
+  const pitch = useMemo(
+    () => arenaCellSizes(viewport.width, viewport.height, spectator),
+    [viewport.width, viewport.height, spectator],
   );
 
   const arenaRef = useRef<HTMLElement>(null);
@@ -217,8 +224,9 @@ export function Game(props: GameProps) {
 
   const stageStyle = {
     '--stage-scale': scale,
-    '--cell-own': `${String(cells.own)}px`,
-    '--cell-opp': `${String(cells.opp)}px`,
+    '--cell-own': `${String(pitch.own)}px`,
+    '--cell-opp': `${String(pitch.opp)}px`,
+    '--banner-clear-cols': COMBO_BANNER_CLEAR_COLUMN,
     '--cell-next': `${String(cells.next)}px`,
   } as CSSProperties;
 
