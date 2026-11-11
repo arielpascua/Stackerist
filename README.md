@@ -39,7 +39,7 @@ Other environment variables: `HOST` (default `0.0.0.0`), `LOG_LEVEL` (default `i
 2. Share the 6-character room code or the invite link (`/g/<CODE>`) from the lobby. Codes use the letters and digits `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no `0`, `O`, `1`, `I` or `L`) and are not case-sensitive.
 3. Your friend opens the link, or types the code on the home page, enters a name and joins. When both players are in, a 3-second standoff counts `3 2 1`, then **DUEL!**. Keys go live at the moment DUEL! appears.
 
-You need a keyboard. On a phone or tablet the game says so and offers **Watch instead**.
+You need a keyboard. On a phone or tablet the game says so and offers **Watch instead**. Watching works on a phone but is small (see [Known limitations](#known-limitations)).
 
 ### Controls
 
@@ -267,7 +267,7 @@ To try the image locally, `docker build -t stackerist .` then `docker run -p 300
 - **The piece seed is only 31 bits.** The per-round piece seed and garbage-hole seed are 31-bit integers feeding a small PRNG. A determined scripted client can recover its seed in about a minute (the reviewer measured 51.7 seconds after about 15 placements) and then see its **own** future pieces beyond the 5-piece preview, and the columns of the garbage holes it will receive. It reveals nothing about the opponent's board or inputs and cannot change server-authoritative state, so the effect is an information advantage, not forgery. The owner accepted this for now; the remedy is under Future work.
 - **Browser bots and assistive overlays cannot be prevented.** Software that reads the screen and sends legal inputs looks like a person.
 - **Joining your own room from two tabs is allowed.** It is useful for testing and gives no advantage, because each seat still plays by the server's rules.
-- **Phones are not a supported player platform.** The game is keyboard-only. Touch-only devices are warned and offered **Watch instead**. If you do open the result card on a phone it is scaled down to between about 39 % and 54 % of full size and is hard to read. The in-game top bar fits a 390 px screen (Music shows as an icon only), but the "joined as spectator" notice collapses to nothing at that width.
+- **Phones are not a supported player platform, and there is no phone layout for watching.** The game is keyboard-only. Touch-only devices are warned and offered **Watch instead**, but the spectator view is the desktop layout scaled down to about half size on a 390 px screen, and the result card to between about 39 % and 54 % of full size, so both are hard to read. The owner decided on 2026-11-11 not to build a portrait layout for this. The in-game top bar fits a 390 px screen (Music shows as an icon only), but the "joined as spectator" notice collapses to nothing at that width.
 - **The Docker image has never been built with Docker on the development machine.** Its stages were replayed by hand, step by step; the first Railway build is the first real image build.
 - **Per-IP limits depend on the host overwriting `X-Real-IP`.** Not yet verified; see the first-deploy checklist.
 - **A long server stall can make inputs bounce for a few seconds.** The server catches up at most 5 ticks per wake and drops the rest. After a stall of roughly 600 ms or more, the client's clock estimate stays ahead of the server's tick until its oldest samples age out (about 4 s), and in that window the server refuses inputs (`BAD_TICK`) and the piece snaps back. Found in code review; not fixed because it is rare and the fix is in the clock estimator.
