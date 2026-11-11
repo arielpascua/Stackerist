@@ -101,3 +101,32 @@ export function notesAt(step: number): Note[] {
 export function midiToHz(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
+
+// ---- The row-clear sound effect (REQ-093) ----
+
+/** E5 G5 A5 C6 E6: A minor pentatonic, so every pitch is in the key of the score above. */
+const CLEAR_PITCHES = [76, 79, 81, 84, 88] as const;
+/** The fixed spacing of the arpeggio. The effect does not follow the tempo: it sounds the same at every level. */
+export const CLEAR_EFFECT_STEP_SECONDS = 0.055;
+/** A lock clears at most four rows. */
+export const MAX_CLEAR_ROWS = 4;
+
+/**
+ * The notes of the row-clear sound, in order, one `CLEAR_EFFECT_STEP_SECONDS` apart: a rising arpeggio on the
+ * lead voice with one more note per row cleared, the last one ringing longer. Nothing for no rows; more than
+ * four is treated as four.
+ */
+export function clearEffectNotes(rows: number): Note[] {
+  const count = Math.min(MAX_CLEAR_ROWS, Math.floor(rows));
+  if (!(count >= 1)) return [];
+  const notes: Note[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    notes.push({
+      voice: 'lead',
+      midi: CLEAR_PITCHES[i] ?? 88,
+      steps: i === count ? 4 : 1.2,
+      gain: 0.4 + 0.05 * i,
+    });
+  }
+  return notes;
+}

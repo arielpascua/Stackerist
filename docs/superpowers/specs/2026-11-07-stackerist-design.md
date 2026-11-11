@@ -376,6 +376,7 @@ Each requirement has an id. **Every test that proves a requirement names its id*
 - REQ-090: The system must record on the server, for each player in each round, pieces placed, accepted actions, garbage sent, received and cancelled, playing ticks, and the stack height every 30 ticks, and send them with the round result.
 - REQ-091: The system must show a post-match report with pieces per second, actions per minute, garbage sent, received and cancelled, and a line chart of both players' stack height over match time.
 - REQ-092: The system must have tests for series scoring (two wins end the series, a draw is replayed, a forfeit ends the series), for the report statistics, and for the stack-height sampling.
+- REQ-093: The system must play a short sound effect, synthesized in the browser with no audio files, at the instant the player's own piece clears one or more rows (the same instant the clear flashes), rising in pitch and length with the number of rows cleared (one to four), and only while the soundtrack itself is allowed to sound (a live round, the music preference on, audio unlocked by a gesture, the tab visible), so the mute button and the M key silence it together with the music.
 
 ## 10. Left to the builder
 
@@ -391,7 +392,7 @@ named here; how the transparent logo is produced; CI caching; test helper design
 | Q2 | Which Railway region? Lag depends on the distance to the server. | **Southeast Asia (Singapore).** |
 | Q3 | Room-creation flooding (the source spec is silent; the site is public). | One live room per connection; at most 10 creates per minute per IP (counting Railway's proxy hops correctly); a 500-live-room cap answering `error: SERVER_BUSY`. |
 | Q4 | Name filtering for kids' names? | No word filter (names are only seen by people who joined with the private code; future work). **Emoji are refused in names for readability** (Ariel, 2026-11-10), as are control, format and bidi characters (security review F7). |
-| Q5 | Sound effects? | **Music is in** (REQ-089, Ariel 2026-11-07). Other sound effects stay future work. |
+| Q5 | Sound effects? | **Music is in** (REQ-089, Ariel 2026-11-07). **A row-clear sound is in** (REQ-093, Ariel 2026-11-11, after the first deploy), played for the player's own clears only and silenced by the same mute control as the music. Other sound effects stay future work. |
 | Q6 | GitHub repo for CI? There is no remote yet. | **Yes: a private GitHub repo**, pushed so the workflow runs there. Railway deploys from this machine. |
 | Q7 | REFERENCE product to beat (design gate). | `tetr.io` — scoped to in-match HUD clarity: reading incoming garbage, combo/attack feedback and the opponent's board at a glance. |
 | Q8 | Build budget. | **Full workflow, every gate.** Stop at each gate result and before shipping. |

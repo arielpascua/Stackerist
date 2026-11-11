@@ -3,7 +3,7 @@
 **Status:** contract for Wave 1+ builders · **Date:** 2026-11-08 · **Author:** cdt:architect
 **Authority:** `docs/superpowers/specs/2026-11-07-stackerist-design.md` @ `04314d9` (wins) → `spec (1).md`
 (where the design adopts it) → `DESIGN.md` / `PRODUCT.md` / `design/tokens/*` (look and copy) → this file.
-The requirement ids are the 92 rows in `.claude/specs/EXTRACTED_REQUIREMENTS.json` (REQ-001…REQ-092).
+The requirement ids are the 92 rows in `.claude/specs/EXTRACTED_REQUIREMENTS.json` (REQ-001…REQ-092). REQ-093 (the row-clear sound) was added on 2026-11-11 after the first deploy and belongs to CORE; the counts in §7.2 below are as designed, for the original 92.
 This file is written against the **merged scaffold** on `build/v1` (`43a8ced`, `498d193`).
 
 **Binding rules for every builder**

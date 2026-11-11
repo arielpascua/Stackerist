@@ -9,11 +9,17 @@
  *   scheduler to match. Everything browser-specific arrives through `MusicDeps`, so tests inject fakes.
  */
 import { MUSIC_STORAGE_KEY } from '@stackerist/protocol';
-import type { Music, MusicPreference, MusicStatus, MusicToggleSource } from '../game/contract.ts';
+import type {
+  Music,
+  MusicPreference,
+  MusicStatus,
+  MusicToggleSource,
+  SoundEffect,
+} from '../game/contract.ts';
 import { browserTimers, type Timers } from '../game/timers.ts';
 import { browserAudioHost, type AudioBackend, type AudioHost } from './graph.ts';
 import { LookaheadScheduler } from './scheduler.ts';
-import { notesAt } from './score.ts';
+import { CLEAR_EFFECT_STEP_SECONDS, clearEffectNotes, notesAt } from './score.ts';
 import { bpmForLevel } from './tempo.ts';
 
 export interface PreferenceStorage {
@@ -42,6 +48,9 @@ export interface MusicService extends Music {
   preference(): MusicPreference;
   lastToggleSource(): MusicToggleSource | null;
 }
+
+/** A clear starts this far ahead of the audio clock, so its first note is never scheduled in the past. */
+const CLEAR_EFFECT_LEAD_SECONDS = 0.01;
 
 const ON: MusicPreference = 'on';
 const OFF: MusicPreference = 'off';
@@ -177,6 +186,15 @@ export function createMusicService(deps: MusicDeps): MusicService {
     },
     setLevel(nextLevel) {
       level = nextLevel;
+    },
+    effect(kind: SoundEffect, rows: number) {
+      // The same question as the music: is sound allowed right now? `playing` already answers it.
+      if (kind !== 'clear' || !playing || backend === null) return;
+      const audio = backend;
+      const start = audio.now() + CLEAR_EFFECT_LEAD_SECONDS;
+      clearEffectNotes(rows).forEach((note, index) => {
+        audio.play(note, start + index * CLEAR_EFFECT_STEP_SECONDS, CLEAR_EFFECT_STEP_SECONDS);
+      });
     },
     stop() {
       wantPlaying = false;

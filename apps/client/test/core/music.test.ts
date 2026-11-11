@@ -16,9 +16,11 @@ import {
   SCHEDULER_TICK_MS,
 } from '../../src/audio/scheduler.ts';
 import {
+  CLEAR_EFFECT_STEP_SECONDS,
   KEY_PITCH_CLASSES,
   LOOP_STEPS,
   STEPS_PER_BAR,
+  clearEffectNotes,
   midiToHz,
   notesAt,
   type Note,
@@ -595,5 +597,200 @@ describe('REQ-089 the cue sheet: start at DUEL!, stop at the end', () => {
     conductor.onFrame({ inputLive: true, level: 0 });
     conductor.onArenaGone();
     expect(calls).toEqual(['start:0', 'stop']);
+  });
+});
+
+describe('REQ-093 the row-clear sound: what it is', () => {
+  it('REQ-093 one to four rows give two to five notes that climb in pitch', () => {
+    for (const rows of [1, 2, 3, 4]) {
+      const notes = clearEffectNotes(rows);
+      expect(notes, `${String(rows)} rows`).toHaveLength(rows + 1);
+      const pitches = notes.map((n) => n.midi);
+      expect([...pitches].sort((x, y) => x - y)).toEqual(pitches);
+      expect(new Set(pitches).size).toBe(pitches.length);
+    }
+  });
+
+  it('REQ-093 every note is in the music key, so the effect never clashes with the score', () => {
+    for (const rows of [1, 2, 3, 4]) {
+      for (const note of clearEffectNotes(rows)) {
+        expect(KEY_PITCH_CLASSES.has(note.midi % 12), `midi ${String(note.midi)}`).toBe(true);
+      }
+    }
+  });
+
+  it('REQ-093 more rows are longer and no louder than the mix allows', () => {
+    const total = (rows: number): number =>
+      clearEffectNotes(rows).reduce((sum, n) => sum + n.steps, 0);
+    expect(total(2)).toBeGreaterThan(total(1));
+    expect(total(3)).toBeGreaterThan(total(2));
+    expect(total(4)).toBeGreaterThan(total(3));
+    for (const note of clearEffectNotes(4)) {
+      expect(note.gain).toBeGreaterThan(0);
+      expect(note.gain).toBeLessThanOrEqual(1);
+      expect(note.voice).toBe('lead');
+    }
+  });
+
+  it('REQ-093 the count is clamped to one to four rows and nothing sounds for no rows', () => {
+    expect(clearEffectNotes(0)).toEqual([]);
+    expect(clearEffectNotes(-3)).toEqual([]);
+    expect(clearEffectNotes(9)).toEqual(clearEffectNotes(4));
+  });
+});
+
+describe('REQ-093 the row-clear sound: when it plays', () => {
+  /** A round is live and the music is sounding. */
+  function playingRig(options: Parameters<typeof musicRig>[0] = {}) {
+    const r = musicRig(options);
+    r.music.unlock();
+    r.music.start(0);
+    r.timers.advance(300);
+    return r;
+  }
+  const effectNotes = (r: ReturnType<typeof musicRig>, before: number) =>
+    r.backend().played.slice(before);
+
+  it('REQ-093 a clear places its notes on the audio clock, in order, right now', () => {
+    const r = playingRig();
+    const before = r.backend().played.length;
+    const now = r.backend().now();
+    r.music.effect?.('clear', 3);
+    const fresh = effectNotes(r, before);
+    expect(fresh.map((p) => p.note)).toEqual(clearEffectNotes(3));
+    expect(fresh[0]?.when ?? -1).toBeGreaterThanOrEqual(now);
+    expect(fresh[0]?.when ?? 99).toBeLessThan(now + 0.1);
+    for (let i = 1; i < fresh.length; i += 1) {
+      const gap = (fresh[i]?.when ?? 0) - (fresh[i - 1]?.when ?? 0);
+      expect(gap).toBeCloseTo(CLEAR_EFFECT_STEP_SECONDS, 6);
+    }
+  });
+
+  it('REQ-093 a clear sounds the same at any speed level: its length does not follow the tempo', () => {
+    const slow = playingRig();
+    const fast = playingRig();
+    fast.music.setLevel(12);
+    const a = slow.backend().played.length;
+    const b = fast.backend().played.length;
+    slow.music.effect?.('clear', 4);
+    fast.music.effect?.('clear', 4);
+    const gaps = (r: ReturnType<typeof musicRig>, from: number): number[] => {
+      const list = effectNotes(r, from);
+      return list.slice(1).map((p, i) => p.when - (list[i]?.when ?? 0));
+    };
+    expect(gaps(slow, a)).toEqual(gaps(fast, b));
+  });
+
+  it('REQ-093 nothing plays before a round is live (music not started)', () => {
+    const r = musicRig();
+    r.music.unlock();
+    r.music.effect?.('clear', 2);
+    expect(r.backend().played).toHaveLength(0);
+  });
+
+  it('REQ-093 nothing plays before the browser has unlocked audio', () => {
+    const r = musicRig({ initial: 'suspended', resumeTo: 'suspended' });
+    r.music.start(0);
+    r.music.effect?.('clear', 2);
+    expect(r.created()).toBe(0);
+  });
+
+  it('REQ-093 the mute button silences the effect together with the music, and un-muting brings it back', () => {
+    const r = playingRig();
+    r.music.toggle();
+    const before = r.backend().played.length;
+    r.music.effect?.('clear', 2);
+    expect(r.backend().played).toHaveLength(before);
+    r.music.toggle();
+    r.music.effect?.('clear', 2);
+    expect(r.backend().played.length).toBeGreaterThan(before);
+  });
+
+  it('REQ-093 the M key silences it too', () => {
+    const r = playingRig();
+    r.music.toggleByKey();
+    const before = r.backend().played.length;
+    r.music.effect?.('clear', 4);
+    expect(r.backend().played).toHaveLength(before);
+  });
+
+  it('REQ-093 a hidden tab plays nothing', () => {
+    const r = playingRig();
+    r.setHidden(true);
+    const before = r.backend().played.length;
+    r.music.effect?.('clear', 1);
+    expect(r.backend().played).toHaveLength(before);
+  });
+
+  it('REQ-093 after stop() (round over, pause, leave) a late clear is silent', () => {
+    const r = playingRig();
+    r.music.stop();
+    const before = r.backend().played.length;
+    r.music.effect?.('clear', 2);
+    expect(r.backend().played).toHaveLength(before);
+  });
+});
+
+describe('REQ-093 the row-clear sound: the cue sheet', () => {
+  function cues() {
+    const calls: string[] = [];
+    const conductor = createConductor({
+      start: (level) => calls.push(`start:${String(level)}`),
+      stop: () => calls.push('stop'),
+      setLevel: (level) => calls.push(`level:${String(level)}`),
+      effect: (kind, rows) => calls.push(`${kind}:${String(rows)}`),
+    });
+    return { calls, conductor };
+  }
+  const flash = (rows: number[], side: 'left' | 'right' = 'left') =>
+    ({ kind: 'flash', side, rows }) as const;
+
+  it('REQ-093 a clear of your own sounds with the number of rows cleared', () => {
+    const { calls, conductor } = cues();
+    conductor.onFrame({ inputLive: true, level: 0 });
+    conductor.onFrame({ inputLive: true, level: 0, fx: [flash([17, 18])] });
+    conductor.onFrame({ inputLive: true, level: 0, fx: [flash([16, 17, 18, 19])] });
+    expect(calls).toEqual(['start:0', 'clear:2', 'clear:4']);
+  });
+
+  it('REQ-093 two clears in one frame sound twice', () => {
+    const { calls, conductor } = cues();
+    conductor.onFrame({ inputLive: true, level: 0 });
+    conductor.onFrame({ inputLive: true, level: 0, fx: [flash([19]), flash([18])] });
+    expect(calls).toEqual(['start:0', 'clear:1', 'clear:1']);
+  });
+
+  it('REQ-093 an opponent clear, a nudge, a projectile and a burst make no sound', () => {
+    const { calls, conductor } = cues();
+    conductor.onFrame({ inputLive: true, level: 0 });
+    conductor.onFrame({
+      inputLive: true,
+      level: 0,
+      fx: [
+        flash([19], 'right'),
+        { kind: 'nudge', side: 'left', rows: 2 },
+        { kind: 'projectile', from: 'left', rows: 2, originRow: 18 },
+        { kind: 'burst', side: 'right', rows: 1 },
+      ],
+    });
+    expect(calls).toEqual(['start:0']);
+  });
+
+  it('REQ-093 a clear on a frame where input is not live makes no sound', () => {
+    const { calls, conductor } = cues();
+    conductor.onFrame({ inputLive: false, level: 0, fx: [flash([19])] });
+    expect(calls).toEqual([]);
+  });
+
+  it('REQ-093 a music service without the effect is fine: a clear is simply silent', () => {
+    const calls: string[] = [];
+    const conductor = createConductor({
+      start: () => calls.push('start'),
+      stop: () => calls.push('stop'),
+      setLevel: () => calls.push('level'),
+    });
+    conductor.onFrame({ inputLive: true, level: 0 });
+    conductor.onFrame({ inputLive: true, level: 0, fx: [flash([19])] });
+    expect(calls).toEqual(['start']);
   });
 });

@@ -178,6 +178,8 @@ export type MusicStatus = 'on' | 'off' | 'blocked' | 'unavailable';
 export type MusicPreference = 'on' | 'off';
 /** W4 (additive): what last toggled the music. DESIGN.md: only a key toggle is announced in the live region. */
 export type MusicToggleSource = 'key' | 'button';
+/** A one-shot sound on top of the music (REQ-093). Only the row clear exists. */
+export type SoundEffect = 'clear';
 export interface Music {
   /** Call from the Create / Join / Next round click (autoplay rules). */
   unlock(): void;
@@ -197,6 +199,10 @@ export interface Music {
   /** W4 (additive; always provided by CORE). What caused the latest toggle, or null before any. Read it inside
    *  a `subscribe` listener: announce "Music on" / "Music off" only when it is 'key'. */
   lastToggleSource?(): MusicToggleSource | null;
+  /** REQ-093 (additive; CORE's implementation always provides it). Plays a one-shot sound now, but only while
+   *  the music itself is allowed to sound (a live round, preference on, audio unlocked, tab visible), so the
+   *  mute button and the M key silence it too. `rows` is the number of rows cleared, 1 to 4. */
+  effect?(kind: SoundEffect, rows: number): void;
 }
 export interface CoreServices {
   readonly store: GameStore;

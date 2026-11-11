@@ -43,14 +43,14 @@ You need a keyboard. On a phone or tablet the game says so and offers **Watch in
 
 ### Controls
 
-| Key                     | Action                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| Left / Right arrows     | Move. Hold to repeat: first repeat after 170 ms (DAS), then every 50 ms (ARR). |
-| Up arrow or `X`         | Rotate clockwise                                                               |
-| `Z` (`Ctrl` also works) | Rotate back (counter-clockwise)                                                |
-| Down arrow              | Soft drop while held                                                           |
-| Space                   | Hard drop (lands and locks at once)                                            |
-| `M`                     | Music on or off (remembered in this browser; on by default)                    |
+| Key                     | Action                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| Left / Right arrows     | Move. Hold to repeat: first repeat after 170 ms (DAS), then every 50 ms (ARR).      |
+| Up arrow or `X`         | Rotate clockwise                                                                    |
+| `Z` (`Ctrl` also works) | Rotate back (counter-clockwise)                                                     |
+| Down arrow              | Soft drop while held                                                                |
+| Space                   | Hard drop (lands and locks at once)                                                 |
+| `M`                     | Music and the row-clear sound on or off (remembered in this browser; on by default) |
 
 ### Rules that matter
 
@@ -110,13 +110,13 @@ flowchart LR
   VIEWS -- "snapshot" --> SP["Spectators"]
 ```
 
-| Package             | Role                                                                                               |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `packages/engine`   | Pure rules: board, pieces, SRS kicks, 7-bag, gravity, locking, combos, garbage. No I/O.            |
-| `packages/protocol` | zod schemas for every message, constants, the information-hiding views, tick estimator, Predictor. |
-| `apps/server`       | Fastify and `@fastify/websocket`: rooms, series, match loop, anti-cheat, static files, `/healthz`. |
-| `apps/client`       | Vite, React and `<canvas>`: screens, keyboard input, prediction, rendering, synthesized music.     |
-| `e2e`, `tools`      | Playwright tests, and repository checks (Dockerfile, `railway.json`, CI, this README).             |
+| Package             | Role                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/engine`   | Pure rules: board, pieces, SRS kicks, 7-bag, gravity, locking, combos, garbage. No I/O.                              |
+| `packages/protocol` | zod schemas for every message, constants, the information-hiding views, tick estimator, Predictor.                   |
+| `apps/server`       | Fastify and `@fastify/websocket`: rooms, series, match loop, anti-cheat, static files, `/healthz`.                   |
+| `apps/client`       | Vite, React and `<canvas>`: screens, keyboard input, prediction, rendering, synthesized music and a row-clear sound. |
+| `e2e`, `tools`      | Playwright tests, and repository checks (Dockerfile, `railway.json`, CI, this README).                               |
 
 How it fits together:
 
@@ -148,7 +148,7 @@ The rule is: assume players will cheat. The first table is the source specificat
 
 ### Further hardening from the security review
 
-A read-only security review of the server found two availability defects (an unbounded send buffer for a slow reader, and one IP address filling the room cap), both fixed. Semgrep (four public rulesets, 92 files) reported 0 findings, but a planted-bug control showed it misses some classes (it caught 2 of 4 planted bugs), so the review relied on reading the code as well. The fixes were re-attacked by the orchestrator with the reviewer's own scripts. A fresh independent re-review is not on record.
+A read-only security review of the server found two availability defects (an unbounded send buffer for a slow reader, and one IP address filling the room cap), both fixed. Semgrep (four public rulesets, 92 files) reported 0 findings, but a planted-bug control showed it misses some classes (it caught 2 of 4 planted bugs), so the review relied on reading the code as well. The fixes were re-attacked by the orchestrator with the reviewer's own scripts. A focused independent re-review on 2026-11-10 then lifted the veto at low risk, with two conditions: the deploy checks (the host must overwrite `X-Real-IP`, preserve `Host`, and handle IPv6) and two further fixes that were made. The deploy checks were run on the live service on 2026-11-11: `X-Real-IP` and `Host` passed, and IPv6 could not be tested (see [Deploying](#deploying)).
 
 - **Origin check.** A browser WebSocket upgrade whose `Origin` host differs from the request's `Host` is refused with 403, so another website cannot drive a visitor's browser into your game. A request with no `Origin` header is allowed, so scripts and tests are not affected: this stops other sites, not scripted cheaters.
 - **Headers on every response:** `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`, `style-src 'self'` in production, `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `connect-src` limited to the site and its own `wss://` host), `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
@@ -167,7 +167,7 @@ A read-only security review of the server found two availability defects (an unb
 
 ## How the rules are tested
 
-As of commit `f9ff770` on `build/v1`, `pnpm test` runs 90 test files and 1,164 tests, all passing (measured 2026-11-11). GitHub CI is green on the commit that records these numbers (see the ledger). Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests. The result for every requirement is in [docs/conformance.md](docs/conformance.md), and the pre-deploy review of operations (logs, configuration, dependencies, rollback) is in [docs/production-readiness.md](docs/production-readiness.md).
+As of the commit that added the row-clear sound (REQ-093), `pnpm test` runs 91 test files and 1,184 tests (measured 2026-11-11). All pass except the CPU test `apps/server/test/perf.test.ts`, which fails on some runs on a busy machine (see Performance below). GitHub CI is green on the commit that records these numbers (see the ledger). Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests. The result for every requirement is in [docs/conformance.md](docs/conformance.md), and the pre-deploy review of operations (logs, configuration, dependencies, rollback) is in [docs/production-readiness.md](docs/production-readiness.md).
 
 | Layer                     | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                 | Where                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -185,7 +185,7 @@ As of commit `f9ff770` on `build/v1`, `pnpm test` runs 90 test files and 1,164 t
 
 **End-to-end suite.** `e2e/*.spec.ts` drives real browsers: create and join by link, play to a result, refresh and rejoin, wrong code, the full room and the eighth and ninth viewer, explicit leave, disconnect, pause and resume, a full best-of-3 with the Next round and New series handshakes, the standoff timing, the report and chart against the server's own numbers, ghost, projectile, danger (and reduced motion), the music button, spectators, and a line clear producing a best-moment panel. One grace-expiry test takes about 40 seconds and only runs with `E2E_SLOW=1`.
 
-Status at commit `f9ff770`, from a run of `pnpm e2e` on 2026-11-11 on an otherwise idle machine: 67 tests, 66 passed, 0 failed, 0 flaky, 1 skipped (the `E2E_SLOW` test, which passed when run on its own earlier). On a heavily loaded machine one spec (`geometry-signature`, the DUEL! overlay check) failed once; it passed 39 of 39 runs (3 repeats of 13 tests) when the machine was idle, so it is sensitive to load. A separate spec starts its own server with `NODE_ENV=production` and plays a real match under the strict Content-Security-Policy, with no policy violations and no console errors; it fails when the server is not in production mode.
+Status at the same commit, from a run of `pnpm e2e` on 2026-11-11 on an otherwise idle machine: 67 tests, 66 passed, 0 failed, 0 flaky, 1 skipped (the `E2E_SLOW` test, which passed when run on its own earlier). On a heavily loaded machine one spec (`geometry-signature`, the DUEL! overlay check) failed once; it passed 39 of 39 runs (3 repeats of 13 tests) when the machine was idle, so it is sensitive to load. A separate spec starts its own server with `NODE_ENV=production` and plays a real match under the strict Content-Security-Policy, with no policy violations and no console errors; it fails when the server is not in production mode.
 
 CI does not run the end-to-end suite, so it does not show these. Re-run `pnpm e2e` for the current state.
 
@@ -285,5 +285,5 @@ To try the image locally, `docker build -t stackerist .` then `docker run -p 300
 - Mobile touch controls
 - Horizontal scaling (rooms are in one process today)
 - "Save best moment as an image"
-- Sound effects beyond the music
+- Sound effects other than the row-clear sound
 - A 128-bit server-side piece seed, or a crypto-backed bag, to close the seed limitation

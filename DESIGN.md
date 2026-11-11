@@ -705,6 +705,14 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
   device preference, not player data. To satisfy autoplay rules, the frontend unlocks the audio
   context on the Create, Join or Next round click. Music starts at DUEL! and stops when the round
   ends.
+- **Row-clear sound (REQ-093):** a short rising arpeggio on the lead voice, played at the instant a
+  row clear flashes on the player's own board, with one note more per row cleared (two notes for one
+  row, five for a four-row clear, the last note ringing longer). Pitches are A minor pentatonic
+  (E5 G5 A5 C6 E6) so it sits in the key of the music, and its note spacing is fixed (55 ms), so it
+  sounds the same at every speed level. It plays only while the music is allowed to sound (a live
+  round, preference on, audio unlocked, tab visible). **The Music button and the M key therefore mute
+  it too; the label stays "Music" and there is no separate effects switch.** It is for the player's
+  own clears only: the opponent's clears, garbage and spectating are silent.
 
 ### Combo banner
 - Shown on a board while that player's combo is ×2 or more (REQ-052), on both boards and for
