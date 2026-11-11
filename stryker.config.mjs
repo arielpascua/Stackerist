@@ -6,6 +6,10 @@
 //   STRYKER_TARGET=engine   pnpm exec stryker run stryker.config.mjs
 //   STRYKER_TARGET=protocol pnpm exec stryker run stryker.config.mjs
 //   STRYKER_TARGET=server   pnpm exec stryker run stryker.config.mjs
+//   STRYKER_TARGET=gates    pnpm exec stryker run stryker.config.mjs   (connection.ts / rooms.ts gate line ranges)
+//
+// Measured on the reference machine (20 cores, concurrency 4): engine ~8 min, protocol ~15 min (contended),
+// server ~45 min, gates see their report; narrow with --mutate when only one file changed.
 //
 // (PowerShell: `$env:STRYKER_TARGET='engine'; pnpm exec stryker run stryker.config.mjs`.)
 // Narrow further with `--mutate "packages/engine/src/board.ts"` (the CLI replaces the list below).
@@ -32,6 +36,20 @@ const targets = {
     mutate: ['apps/server/src/{match,codes,series,clientIp,http,rateLimit,config}.ts'],
     timeoutMS: 30_000,
   },
+  // The anti-cheat gates inside the two big files, by line range (whole files are too slow): the pong-only-if-ping
+  // rule (connection.ts 115-126, 541-547), the create/join/rejoin/input/rematch gates (connection.ts 402-536),
+  // joinRole / spectatorsFull / matchToken (rooms.ts 162-180) and onInput / onLeave / onRematch (rooms.ts 278-358).
+  gates: {
+    dir: 'apps/server',
+    vitest: 'server',
+    mutate: [
+      'apps/server/src/connection.ts:115-126',
+      'apps/server/src/connection.ts:402-547',
+      'apps/server/src/rooms.ts:162-180',
+      'apps/server/src/rooms.ts:278-358',
+    ],
+    timeoutMS: 30_000,
+  },
 };
 
 const t = targets[target];
@@ -42,7 +60,7 @@ export default {
   testRunner: 'vitest',
   plugins: ['@stryker-mutator/vitest-runner'],
   // stryker/vitest.<target>.config.mjs = the package's own vitest config, minus tests that read source text.
-  vitest: { configFile: `stryker/vitest.${target}.config.mjs`, dir: t.dir },
+  vitest: { configFile: `stryker/vitest.${t.vitest ?? target}.config.mjs`, dir: t.dir },
   mutate: t.mutate,
   coverageAnalysis: 'perTest',
   timeoutMS: t.timeoutMS,
