@@ -8,11 +8,15 @@
 //   STRYKER_TARGET=server   pnpm exec stryker run stryker.config.mjs
 //   STRYKER_TARGET=gates    pnpm exec stryker run stryker.config.mjs   (connection.ts / rooms.ts gate line ranges)
 //
-// Measured on the reference machine (20 cores, concurrency 4): engine ~8 min, protocol ~15 min (contended),
-// server ~45 min, gates see their report; narrow with --mutate when only one file changed.
+// Measured on the reference machine (20 cores, concurrency 4, other runs in parallel): engine ~8-14 min
+// (950 mutants), protocol ~6-15 min (514), server ~45 min (723), gates ~25 min (345). Narrow with --mutate
+// (a file, or `file:startLine-endLine` ranges, comma separated) to re-check only what a change touched;
+// give parallel runs their own sandbox with `--tempDirName .stryker-tmp/<name>` (git-ignored).
+//
+// The tests that read SOURCE TEXT (engine purity.test.ts) are left out of the mutation run (see
+// stryker/vitest.engine.config.mjs): Stryker's instrumentation rewrites the files they grep. `pnpm test` runs them.
 //
 // (PowerShell: `$env:STRYKER_TARGET='engine'; pnpm exec stryker run stryker.config.mjs`.)
-// Narrow further with `--mutate "packages/engine/src/board.ts"` (the CLI replaces the list below).
 // Output: reports/mutation/<target>/index.html and mutation.json (reports/ is git-ignored);
 // the sandbox lives in .stryker-tmp/ (git-ignored, removed after each run).
 // The server target mutates the server rules and gates; its integration tests use real WebSockets,
