@@ -32,10 +32,10 @@ export function ConnectionBanner({
       </p>
       {failed ? (
         <div className="conn-banner__actions">
-          <Button variant="hud" onClick={onRetry} data-testid={TEST_IDS.banner.tryAgain}>
+          <Button variant="secondary" onClick={onRetry} data-testid={TEST_IDS.banner.tryAgain}>
             {COPY.errors.tryAgain}
           </Button>
-          <Button variant="hud" onClick={onHome} data-testid={TEST_IDS.banner.backHome}>
+          <Button variant="secondary" onClick={onHome} data-testid={TEST_IDS.banner.backHome}>
             {COPY.errors.backToHome}
           </Button>
         </div>

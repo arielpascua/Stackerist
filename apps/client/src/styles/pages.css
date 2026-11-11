@@ -330,6 +330,11 @@
   gap: var(--space-2);
 }
 
+/* The banner is itself a panel, so the secondary hover fill steps to the chip surface to stay visible. */
+.conn-banner .btn--secondary:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--surface-chip);
+}
+
 /* Short laptop viewports: tighter page padding so home and lobby fit without scrolling. */
 @media (max-height: 700px) {
   .arena-page {

@@ -8,6 +8,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientState, CoreServices, Music } from '../../src/game/contract.ts';
+import { ConnectionBanner } from '../../src/ui/components/Notices.tsx';
 import { COPY } from '../../src/ui/copy.ts';
 import { Game } from '../../src/ui/screens/Game.tsx';
 import { paintClock } from '../../src/ui/screens/game/framePaint.ts';
@@ -166,5 +167,21 @@ describe('REQ-049 the match clock does not run while disconnected', () => {
     expect(shown).toBe('01:11');
     expect(clock.textContent).toBe('01:11');
     expect(clock.dataset.stale).toBeUndefined();
+  });
+});
+
+describe('REQ-049 U5: the lobby connection banner buttons meet the 44 px hit target', () => {
+  it('REQ-049 Try again and Back to home use the 44 px secondary size, not the 32 px HUD size', () => {
+    const html = renderToStaticMarkup(
+      <ConnectionBanner failed reason={null} onRetry={noop} onHome={noop} />,
+    );
+    const buttons = html.match(/<button[^>]*>/g);
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons ?? []) {
+      expect(button).toContain('btn--secondary');
+      expect(button).not.toContain('btn--hud');
+    }
+    expect(html).toContain(COPY.errors.tryAgain);
+    expect(html).toContain(COPY.errors.backToHome);
   });
 });
