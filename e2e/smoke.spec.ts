@@ -27,7 +27,7 @@ import {
 } from './support/app.ts';
 
 test.describe('two players, one real round', () => {
-  test('A creates, B joins by link, both play to a result card', async ({ browser }) => {
+  test('REQ-066 A creates, B joins by link, both play to a result card', async ({ browser }) => {
     test.setTimeout(120_000);
     const a = await newPlayer(browser, 'Alice');
     const b = await newPlayer(browser, 'Bob');

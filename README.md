@@ -167,7 +167,7 @@ A read-only security review of the server found two availability defects (an unb
 
 ## How the rules are tested
 
-As of commit `465ea42` on `build/v1`, `pnpm test` runs 85 test files and 1,032 tests, all passing (measured 2026-11-11), and GitHub CI is green on that commit. Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests.
+As of commit `301f51e` on `build/v1`, `pnpm test` runs 91 test files and 1,157 tests, all passing (measured 2026-11-11). GitHub CI was green on the commit before it (`bf15f01`); it has not yet run on this one. Every test title that proves a requirement starts with its id (for example `REQ-014`), and the conformance check maps requirement ids to tests.
 
 | Layer                     | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                 | Where                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -185,7 +185,7 @@ As of commit `465ea42` on `build/v1`, `pnpm test` runs 85 test files and 1,032 t
 
 **End-to-end suite.** `e2e/*.spec.ts` drives real browsers: create and join by link, play to a result, refresh and rejoin, wrong code, the full room and the eighth and ninth viewer, explicit leave, disconnect, pause and resume, a full best-of-3 with the Next round and New series handshakes, the standoff timing, the report and chart against the server's own numbers, ghost, projectile, danger (and reduced motion), the music button, spectators, and a line clear producing a best-moment panel. One grace-expiry test takes about 40 seconds and only runs with `E2E_SLOW=1`.
 
-Status at commit `465ea42`, from a run of `pnpm e2e` on 2026-11-11: 67 tests, 66 passed, 0 failed, 1 skipped (the `E2E_SLOW` test, which passed when run on its own earlier). A separate spec starts its own server with `NODE_ENV=production` and plays a real match under the strict Content-Security-Policy, with no policy violations and no console errors; it fails when the server is not in production mode.
+Status at commit `301f51e`, from a run of `pnpm e2e` on 2026-11-11 on an otherwise idle machine: 67 tests, 66 passed, 0 failed, 0 flaky, 1 skipped (the `E2E_SLOW` test, which passed when run on its own earlier). On a heavily loaded machine one spec (`geometry-signature`, the DUEL! overlay check) failed once; it passed 39 of 39 runs (3 repeats of 13 tests) when the machine was idle, so it is sensitive to load. A separate spec starts its own server with `NODE_ENV=production` and plays a real match under the strict Content-Security-Policy, with no policy violations and no console errors; it fails when the server is not in production mode.
 
 CI does not run the end-to-end suite, so it does not show these. Re-run `pnpm e2e` for the current state.
 
@@ -193,7 +193,29 @@ CI does not run the end-to-end suite, so it does not show these. Re-run `pnpm e2
 
 **Coverage.** Engine coverage from `pnpm test:coverage` on this commit: lines 99.68 % (314 of 315), branches 97.63 % (206 of 211), functions 100 % (77 of 77), statements 99.45 % (362 of 364). CI fails the build below 90 % lines.
 
-**Mutation testing.** Not run. Stryker (`@stryker-mutator/core` and the Vitest runner) is installed but has no configuration, so there is no mutation score to report. During the build, authors did hand-mutate critical rules and confirmed tests failed (protocol: 4 of 4 caught; engine: 5 rules, tests failed each time; client core: 15 of 16 caught; server: 12 caught after two tests were strengthened; client effects and music: 8 of 8). That is spot-checking, not a measurement.
+**Mutation testing** (Stryker 10, measured 2026-11-11). It was run on the engine, the protocol package and the server, where a rule that is wrong but still passes the tests would hurt most. The client is not mutation-tested.
+
+| Target                                           | Score before | Score after | Mutants |
+| ------------------------------------------------ | ------------ | ----------- | ------- |
+| Engine (9 files)                                 | 92.48 %      | 97.03 %     | 950     |
+| Protocol (6 files)                               | 90.66 %      | 96.27 %     | 514     |
+| Server (7 files)                                 | 81.88 %      | 96.27 %     | 723     |
+| Connection and room gates (selected line ranges) | 76.52 %      | 89.28 %     | 345     |
+
+Each surviving mutant on a critical path was either killed with a new test (all named with their `REQ-` ids, in the `mutation-gaps` and `mutation-gates` test files) or shown to be equivalent or unreachable, with the reason recorded in the ledger. Limits of this measurement:
+
+- The server and gates "after" scores are the full baseline merged with re-runs of only the lines that had survivors. The 45-minute full server run was not repeated.
+- `connection.ts` and `rooms.ts` are too slow to mutate as whole files, so only their gate line ranges were mutated. Fifteen of the gates were also broken by hand (bucket charged twice, token check loosened, spectator allowed to send input, rematch gate removed, `SAFE_HOST` and origin checks weakened and so on), and the tests went red each time.
+- Equivalent mutants include guards made unreachable by `noUncheckedIndexedAccess`, constant-time token comparison (a test cannot see timing) and pruning-only code.
+
+To re-run (the configuration and the per-target Vitest variants are in `stryker.config.mjs` and `stryker/`):
+
+```
+STRYKER_TARGET=engine pnpm exec stryker run stryker.config.mjs     # or protocol, server, gates
+pnpm exec stryker run stryker.config.mjs --mutate "path/to/file.ts:40-80"   # narrow to a line range
+```
+
+Give parallel runs their own sandbox with `--tempDirName .stryker-tmp/<name>`. A full server run takes about 45 minutes. Reports go to `reports/`, which is not committed.
 
 **Performance (REQ-068).** One running match used 3.91 % of one CPU core, with the loop holding 60.0 ticks per second and the largest snapshot at 1,734 bytes (budget 2,048). It was measured on a busy development machine, and the test passes if any one of up to three 10-second windows is under 5 %. Re-measure on the host.
 

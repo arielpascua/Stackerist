@@ -21,7 +21,9 @@ import {
 } from './support/app.ts';
 import { placeOnePiece } from './support/bot.ts';
 
-test('a real line clear earns a best-moment panel; no clear, no panel', async ({ browser }) => {
+test('REQ-066 a real line clear earns a best-moment panel; no clear, no panel', async ({
+  browser,
+}) => {
   test.setTimeout(150_000);
   const a = await newPlayer(browser, 'Alice');
   const b = await newPlayer(browser, 'Bob');

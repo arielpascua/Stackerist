@@ -1491,8 +1491,10 @@ export interface CoreServices { readonly store: GameStore; readonly mountArena: 
 ### 6.6 Coverage (REQ-067) and mutation
 - Coverage is already configured in `packages/engine/vitest.config.ts` (v8, `src/**/*.ts`, `thresholds.lines: 90`).
   `pnpm test:coverage` runs it, and CI runs it.
-- Mutation testing (ledger gate 10a): `@stryker-mutator/core` and `vitest-runner` 10.1.1 are installed. QA owns
-  `stryker.config.mjs` (W5) and scopes it to `packages/engine/src/**`.
+- Mutation testing (ledger gate 10a): `@stryker-mutator/core` and `vitest-runner` 10.1.1; `stryker.config.mjs`
+  has targets `engine`, `protocol`, `server` and `gates` (selected line ranges of `connection.ts` and `rooms.ts`).
+  As built it covers more than the engine alone (the W5 plan scoped it to `packages/engine/src/**`). Scores and
+  limits are in the README ("How the rules are tested").
 
 ### 6.7 Playwright (config as scaffolded: `e2e/playwright.config.ts`)
 - **Scaffolded config:** `testDir` is `e2e/`, `testMatch: **/*.spec.ts`, one worker, Desktop Chrome. Chromium

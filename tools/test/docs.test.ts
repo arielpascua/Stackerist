@@ -606,7 +606,8 @@ describe('REQ-078 the checks can fail', () => {
     expect(mermaidProblems(broken(none))).toContain('no ```mermaid fenced block');
     const noEdges = readmeSource.replace(/-->/g, '---').replace(/-- "([^"]*)" ---/g, '--- ');
     expect(mermaidProblems(broken(noEdges))).toContain('the mermaid block has no edges');
-    const unclosed = readmeSource.replace(/(```mermaid[\s\S]*?)\n```\n/, '$1\n');
+    // Drop the closing fence and everything after it, so no later code fence in the README can close it.
+    const unclosed = readmeSource.replace(/(```mermaid[\s\S]*?)\n```\n[\s\S]*$/, '$1\n');
     expect(mermaidProblems(broken(unclosed)).join('\n')).toMatch(/never closed|not inside/);
   });
 
