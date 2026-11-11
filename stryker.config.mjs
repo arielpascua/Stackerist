@@ -41,8 +41,8 @@ if (!t) throw new Error(`Unknown STRYKER_TARGET "${target}" (engine | protocol |
 export default {
   testRunner: 'vitest',
   plugins: ['@stryker-mutator/vitest-runner'],
-  // stryker/vitest.<target>.config.ts = the package's own vitest config, minus tests that read source text.
-  vitest: { configFile: `stryker/vitest.${target}.config.ts`, dir: t.dir },
+  // stryker/vitest.<target>.config.mjs = the package's own vitest config, minus tests that read source text.
+  vitest: { configFile: `stryker/vitest.${target}.config.mjs`, dir: t.dir },
   mutate: t.mutate,
   coverageAnalysis: 'perTest',
   timeoutMS: t.timeoutMS,
