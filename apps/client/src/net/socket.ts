@@ -8,11 +8,16 @@
  *   first connect) reconnects with backoff 0.5 → 1 → 2 → 4 s for as long as the GRACE_MS window lasts;
  *   the store sends `rejoin` with the stored token on every reopen.
  *
+ * Liveness (U2): the server sends a `ping` every PING_INTERVAL_MS, so a silent network drop (Wi-Fi gone, no
+ * close event for a long while) shows up as "no server message for two intervals". The watchdog then
+ * abandons the socket on the client side and takes the same reconnect path as a 1006 close.
+ *
  * The WebSocket itself sits behind `SocketFactory`, so the policy is unit-tested without a DOM.
  */
 import {
   CLOSE_CODES,
   GRACE_MS,
+  PING_INTERVAL_MS,
   RECOVERABLE_CLOSE_CODES,
   WS_PATH,
   parseServerMessage,
@@ -28,6 +33,12 @@ import type { Timers } from '../game/timers.ts';
  * constant for it, so this is its single definition; every attempt after the last uses the last value.
  */
 export const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000] as const;
+
+/** How long an open socket may stay silent before the client calls it lost: two server pings. */
+export const LIVENESS_MS = 2 * PING_INTERVAL_MS;
+
+/** The close code the watchdog reports for a socket it gave up on (abnormal closure, always retried). */
+const LIVENESS_LOST_CODE = 1006;
 
 /** Close code sent by the client when it closes on purpose (WebSocket "normal closure"). */
 const NORMAL_CLOSURE = 1000;
@@ -102,6 +113,11 @@ export interface GameSocketOptions {
   /** Monotonic ms (performance.now()); measures the reconnect window. */
   now(): number;
   readonly events: GameSocketEvents;
+  /**
+   * Subscribes to "the tab became visible" (returns the unsubscribe). Background tabs throttle timers, so
+   * the silence clock restarts on every return instead of counting the hidden time.
+   */
+  watchVisibility?(onVisible: () => void): () => void;
 }
 
 type Phase =
@@ -116,6 +132,10 @@ export class GameSocket {
   #phase: Phase = { kind: 'idle' };
   #conn: SocketConnection | null = null;
   #retryTimer: number | null = null;
+  #watchdog: number | null = null;
+  /** `now()` of the last sign of life from the server (or the last time the tab came back). */
+  #heardAt = 0;
+  #unwatchVisibility: (() => void) | null = null;
 
   constructor(options: GameSocketOptions) {
     this.#options = options;
@@ -143,6 +163,7 @@ export class GameSocket {
   /** Closes on purpose: no reconnect. */
   close(): void {
     this.#cancelRetry();
+    this.#stopWatchdog();
     const conn = this.#conn;
     this.#conn = null;
     this.#phase = { kind: 'closed' };
@@ -155,6 +176,7 @@ export class GameSocket {
       onOpen: () => {
         if (this.#conn !== conn) return;
         this.#phase = { kind: 'open' };
+        this.#startWatchdog();
         this.#options.events.onStatus('open', null);
         this.#options.events.onOpen();
       },
@@ -173,6 +195,7 @@ export class GameSocket {
     if (typeof data !== 'string') return;
     const msg = parseServerMessage(data);
     if (msg === null) return;
+    this.#heardAt = this.#options.now();
     if (msg.type === 'ping') {
       this.send({ type: 'pong', t: msg.t });
     }
@@ -180,6 +203,7 @@ export class GameSocket {
   }
 
   #dropped(code: number): void {
+    this.#stopWatchdog();
     this.#conn = null;
     this.#options.events.onDropped?.(code);
     const previous = this.#phase;
@@ -205,6 +229,48 @@ export class GameSocket {
       this.#retryTimer = null;
       this.#open();
     }, delay);
+  }
+
+  #startWatchdog(): void {
+    this.#stopWatchdog();
+    this.#heardAt = this.#options.now();
+    this.#unwatchVisibility =
+      this.#options.watchVisibility?.(() => {
+        this.#heardAt = this.#options.now();
+      }) ?? null;
+    this.#armWatchdog(LIVENESS_MS);
+  }
+
+  #armWatchdog(delay: number): void {
+    this.#watchdog = this.#options.timers.set(() => {
+      this.#watchdog = null;
+      const silent = this.#options.now() - this.#heardAt;
+      if (silent < LIVENESS_MS) {
+        this.#armWatchdog(LIVENESS_MS - silent);
+        return;
+      }
+      this.#abandon();
+    }, delay);
+  }
+
+  #stopWatchdog(): void {
+    if (this.#watchdog !== null) {
+      this.#options.timers.clear(this.#watchdog);
+      this.#watchdog = null;
+    }
+    this.#unwatchVisibility?.();
+    this.#unwatchVisibility = null;
+  }
+
+  /**
+   * Silent for too long: close our end without waiting for the close handshake (on a dead network it
+   * never comes) and carry on as if the socket had dropped with 1006.
+   */
+  #abandon(): void {
+    const conn = this.#conn;
+    if (conn === null || this.#phase.kind !== 'open') return;
+    this.#dropped(LIVENESS_LOST_CODE);
+    conn.close(NORMAL_CLOSURE);
   }
 
   #cancelRetry(): void {

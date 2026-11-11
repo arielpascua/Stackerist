@@ -15,6 +15,17 @@ import { bindKeyboard, createKeyHandlers } from './keyboard.ts';
 import { CoreStore } from './store.ts';
 import { browserTimers } from './timers.ts';
 
+/** Calls `onVisible` whenever the tab becomes visible again; returns the unsubscribe. */
+function watchTabVisible(onVisible: () => void): () => void {
+  const listener = (): void => {
+    if (document.visibilityState === 'visible') onVisible();
+  };
+  document.addEventListener('visibilitychange', listener);
+  return () => {
+    document.removeEventListener('visibilitychange', listener);
+  };
+}
+
 export function createCoreServices(): CoreServices {
   const now = (): number => performance.now();
   const store = new CoreStore({
@@ -25,6 +36,7 @@ export function createCoreServices(): CoreServices {
         timers: browserTimers,
         now,
         events,
+        watchVisibility: watchTabVisible,
       }),
     storage: browserSessionStorage(),
     predictor: new Predictor(),
