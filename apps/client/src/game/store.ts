@@ -55,7 +55,6 @@ import type {
   Side,
 } from './contract.ts';
 import { registerFrameDriver, type FrameDriver } from './driver.ts';
-import { SnapshotEventFilter } from './events.ts';
 import { isDanger, sideSeats, standoffPhase } from './frame.ts';
 import { InputController } from './input.ts';
 import type { Timers } from './timers.ts';
@@ -210,8 +209,6 @@ export class CoreStore implements GameStore, FrameDriver {
   #chains: Record<Seat, Chain> = { A: NO_CHAIN, B: NO_CHAIN };
   /** Snapshot-driven effects waiting for the next frame. */
   #fxQueue: FxEvent[] = [];
-  /** Each attack/cancel event plays once, however many snapshots repeat it (REQ-087). */
-  readonly #eventFilter = new SnapshotEventFilter();
   /** True once the estimator has an anchor or a snapshot sample (the match clock is meaningful). */
   #clockKnown = false;
   #ownMemo: {
@@ -533,7 +530,6 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#nextSeq = 1;
     this.#reseedPredictor();
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
-    this.#eventFilter.reset();
     this.#setLive(false);
     this.#input.newRound();
     this.#patch({
@@ -624,7 +620,9 @@ export class CoreStore implements GameStore, FrameDriver {
         this.#fxQueue.push({ kind: 'nudge', side: this.#sideOf(seat, role), rows: inserted });
       }
     }
-    for (const event of this.#eventFilter.fresh(msg.events)) {
+    // The server hands each event to exactly one snapshot (takeSnapshotEvents clears; catch-up sends []),
+    // so every listed event plays, even two equal ones from one tick (REQ-087).
+    for (const event of msg.events) {
       if (event.type === 'attack') {
         const chain = chains[event.from];
         chains[event.from] = { sent: chain.sent + event.rows, cancelled: chain.cancelled };
@@ -783,7 +781,6 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#publicMemo = {};
     this.#publics = {};
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
-    this.#eventFilter.reset();
     this.#fxQueue = [];
     this.#nextSeq = 1;
     this.#clockKnown = false;

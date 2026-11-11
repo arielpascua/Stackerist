@@ -2,7 +2,6 @@ import { ghostPosition, pieceCells, parseBoard } from '@stackerist/engine';
 import type { SnapshotEvent } from '@stackerist/protocol';
 import { describe, expect, it } from 'vitest';
 import { danger } from '../../../../design/tokens/tokens.ts';
-import { SnapshotEventFilter, eventIdentity } from '../../src/game/events.ts';
 import { isDanger } from '../../src/game/frame.ts';
 import { EMPTY, oppState, ownState, rig, snapshot } from './storeRig.ts';
 
@@ -19,35 +18,7 @@ const cancel = (seat: 'A' | 'B', rows: number, tick: number): SnapshotEvent => (
   tick,
 });
 
-describe('REQ-087 each attack and cancel event plays once', () => {
-  it('REQ-087 an event is identified by kind, seat, tick and rows', () => {
-    expect(eventIdentity(attack('A', 2, 120))).toBe('attack:A:120:2');
-    expect(eventIdentity(cancel('B', 1, 120))).toBe('cancel:B:120:1');
-    expect(eventIdentity(attack('A', 2, 120))).not.toBe(eventIdentity(cancel('A', 2, 120)));
-  });
-
-  it('REQ-087 a repeated snapshot never replays an event it already carried', () => {
-    const filter = new SnapshotEventFilter();
-    const events = [attack('A', 2, 120), cancel('B', 1, 120)];
-    expect(filter.fresh(events)).toEqual(events);
-    expect(filter.fresh(events)).toEqual([]);
-    // A later snapshot that lists the old event plus a new one yields only the new one.
-    expect(filter.fresh([...events, attack('B', 4, 130)])).toEqual([attack('B', 4, 130)]);
-  });
-
-  it('REQ-087 two different attacks in different ticks both play', () => {
-    const filter = new SnapshotEventFilter();
-    expect(filter.fresh([attack('A', 1, 10)])).toHaveLength(1);
-    expect(filter.fresh([attack('A', 1, 11)])).toHaveLength(1);
-  });
-
-  it('REQ-087 reset forgets identities (a new round starts its ticks over)', () => {
-    const filter = new SnapshotEventFilter();
-    filter.fresh([attack('A', 1, 10)]);
-    filter.reset();
-    expect(filter.fresh([attack('A', 1, 10)])).toHaveLength(1);
-  });
-
+describe('REQ-087 each attack and cancel event in a snapshot plays', () => {
   it('REQ-087 the store emits one projectile and one burst per event, sides from the viewer', () => {
     const r = rig('A');
     const goAt = r.startRound();
@@ -62,18 +33,18 @@ describe('REQ-087 each attack and cancel event plays once', () => {
     expect(fx.filter((e) => e.kind === 'burst')).toEqual([
       { kind: 'burst', side: 'left', rows: 1 },
     ]);
-    // The same snapshot again (a resend) adds nothing.
-    r.receive(snapshot(100, ownState(), oppState(), { events }));
-    expect(r.frame().fx.filter((e) => e.kind === 'projectile' || e.kind === 'burst')).toEqual([]);
   });
 
-  it('REQ-087 a repeated snapshot does not double the combo chain totals either', () => {
+  it('REQ-087 two equal attacks from one tick (two clearing hard drops) both fly and both count in the chain', () => {
     const r = rig('A');
-    r.startRound();
-    const events = [attack('A', 3, 100), cancel('A', 2, 100)];
+    const goAt = r.startRound();
+    r.timers.now = goAt;
+    // The server really emits this pair (apps/server/test/snapshotEvents.test.ts).
+    const events = [attack('A', 1, 100), attack('A', 1, 100)];
     r.receive(snapshot(100, ownState(), oppState(), { events }));
-    r.receive(snapshot(100, ownState(), oppState(), { events }));
-    expect(r.frame().left?.chain).toEqual({ sent: 3, cancelled: 2 });
+    const frame = r.frame();
+    expect(frame.fx.filter((e) => e.kind === 'projectile')).toHaveLength(2);
+    expect(frame.left?.chain).toEqual({ sent: 2, cancelled: 0 });
   });
 
   it('REQ-087 spectators see A on the left: an attack from B flies from the right board', () => {
