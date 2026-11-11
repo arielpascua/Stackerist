@@ -4,8 +4,6 @@
  * views, the client's tick estimator and the run-ahead predictor. `typeAssertions.ts` is compile-time
  * only and exports nothing at runtime.
  */
-export const PROTOCOL_VERSION = 1;
-
 export * from './constants.js';
 export * from './schemas.js';
 export type * from './messages.js';

@@ -162,6 +162,30 @@ describe('REQ-053 keyboard controls (pure input core)', () => {
     expect(types()).toEqual(['softDropStart', 'softDropStop']);
   });
 
+  it('REQ-053 a soft drop still held into the next round is started again for the fresh engine state', () => {
+    const { controller, types } = rig();
+    controller.keyDown('ArrowDown', false);
+    controller.setEnabled(false); // the round ends
+    controller.newRound(); // the next countdown
+    controller.setEnabled(true); // DUEL!
+    expect(types()).toEqual(['softDropStart', 'softDropStart']);
+    controller.keyUp('ArrowDown');
+    expect(types()).toEqual(['softDropStart', 'softDropStart', 'softDropStop']);
+  });
+
+  it('REQ-053 a soft drop released before the next round sends no stop for it, and ↓ pressed later starts normally', () => {
+    const { controller, types } = rig();
+    controller.keyDown('ArrowDown', false);
+    controller.setEnabled(false);
+    controller.keyUp('ArrowDown');
+    controller.newRound();
+    controller.setEnabled(true);
+    expect(types()).toEqual(['softDropStart']);
+    controller.keyDown('ArrowDown', false);
+    controller.keyUp('ArrowDown');
+    expect(types()).toEqual(['softDropStart', 'softDropStart', 'softDropStop']);
+  });
+
   it('REQ-053 unknown keys are ignored', () => {
     const { controller, types } = rig();
     controller.keyDown('KeyA', false);

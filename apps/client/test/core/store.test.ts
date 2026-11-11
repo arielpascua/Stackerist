@@ -13,6 +13,7 @@ import {
   type SnapshotMessage,
 } from '@stackerist/protocol';
 import { describe, expect, it } from 'vitest';
+import { createConductor } from '../../src/audio/conductor.ts';
 import type { FrameModel } from '../../src/game/contract.ts';
 import { frameDriverOf } from '../../src/game/driver.ts';
 import type { GameSocketEvents } from '../../src/net/socket.ts';
@@ -24,7 +25,9 @@ const CODES = ErrorCodeSchema.enum;
 const SERVER_NOW = 1_700_000_000_000;
 const EMPTY = '..........';
 
-function room(status: 'waiting' | 'countdown' | 'playing' | 'paused'): ServerMessage {
+function room(
+  status: 'waiting' | 'countdown' | 'playing' | 'paused' | 'roundOver' | 'seriesOver',
+): ServerMessage {
   return {
     type: 'room',
     code: CODE,
@@ -648,5 +651,193 @@ describe('REQ-055 store side of the canvas: frames, HUD and effects', () => {
     ]);
     expect(frame.right?.chain).toEqual({ sent: 3, cancelled: 1 });
     expect(r.frame().fx).toEqual([]);
+  });
+});
+
+describe('REQ-021 a fresh page rejoining a live round (F5 after a silent drop)', () => {
+  /** What the server sends a replacing rejoin while `playing`: joined, room, snapshot (and the anchor). */
+  function freshPageRejoin(withAnchor: boolean) {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'joined', code: CODE, seat: 'A', token: TOKEN });
+    r.receive(room('playing'));
+    r.receive(snapshot(120, ownState(120)));
+    r.timers.advance(40);
+    if (withAnchor) {
+      r.receive({ type: 'resumed', startsAt: SERVER_NOW, serverNow: SERVER_NOW, tick: 120 });
+    }
+    return r;
+  }
+
+  it('REQ-021 without any clock anchor the fresh page drops every key (the gate this documents)', () => {
+    const r = freshPageRejoin(false);
+    r.timers.advance(2000);
+    expect(r.frame().inputLive).toBe(false);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs()).toEqual([]);
+  });
+
+  it('REQ-021 the anchor sent with the rejoin snapshot makes input live at once, stamped near the server tick', () => {
+    const r = freshPageRejoin(true);
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    const [input] = r.inputs();
+    expect(input).toMatchObject({ type: 'input', seq: 1, action: { type: 'rotateCW' } });
+    if (input?.type !== 'input') throw new Error('no input');
+    expect(input.tick).toBeGreaterThanOrEqual(120);
+    expect(input.tick).toBeLessThanOrEqual(130);
+  });
+
+  it('REQ-021 the same page reconnecting gets the same anchor and stays playable', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.receive(room('playing'));
+    r.timers.advance(goAt + 500);
+    expect(r.frame().inputLive).toBe(true);
+    r.drop();
+    r.openSocket();
+    r.receive({ type: 'joined', code: CODE, seat: 'A' });
+    r.receive(room('playing'));
+    r.receive(snapshot(150, ownState(150)));
+    r.receive({
+      type: 'resumed',
+      startsAt: SERVER_NOW + 9000,
+      serverNow: SERVER_NOW + 9000,
+      tick: 150,
+    });
+    r.timers.advance(50);
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
+  });
+});
+
+describe('REQ-021 no input while a bind or rejoin request is outstanding', () => {
+  it('REQ-021 a key pressed after the socket reopens but before joined sends nothing; after joined the next input is seq 1', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 500);
+    expect(r.frame().inputLive).toBe(true);
+    for (let i = 0; i < 4; i += 1) r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().map((m) => (m.type === 'input' ? m.seq : 0))).toEqual([1, 2, 3, 4]);
+    r.drop();
+    r.openSocket();
+    expect(r.sent.at(-1)).toEqual({ type: 'rejoin', code: CODE, token: TOKEN });
+    const sentBefore = r.sent.length;
+    // The rAF loop keeps running while the rejoin is in flight.
+    expect(r.frame().inputLive).toBe(false);
+    r.store.input.keyDown('KeyZ', false);
+    expect(r.sent).toHaveLength(sentBefore);
+    r.receive({ type: 'joined', code: CODE, seat: 'A' });
+    r.receive(room('playing'));
+    r.receive(snapshot(150, ownState(150)));
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
+    expect(r.sent.length).toBe(sentBefore + 1);
+  });
+});
+
+describe('REQ-089 REQ-054 a room that is no longer in a round never goes live or plays music', () => {
+  const ENDED = ['seriesOver', 'roundOver', 'waiting'] as const;
+
+  it('REQ-089 the room ending mid-countdown (forfeit, no gameOver) clears the standoff, so DUEL! never goes live', () => {
+    for (const status of ENDED) {
+      const r = rig();
+      const goAt = r.startRound();
+      r.timers.advance(goAt - 1000);
+      r.receive(room(status));
+      expect(r.store.getState().countdown).toBeNull();
+      r.timers.advance(2000);
+      const frame = r.frame();
+      expect(frame.inputLive).toBe(false);
+      expect(frame.standoff).toBeNull();
+      r.store.input.keyDown('ArrowUp', false);
+      expect(r.inputs()).toEqual([]);
+    }
+  });
+
+  it('REQ-089 a stale countdown cannot go live when the room status is already over', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.receive(room('seriesOver'));
+    r.receive({ type: 'countdown', startsAt: SERVER_NOW + 3000, serverNow: SERVER_NOW, tick: 0 });
+    r.timers.advance(goAt + 100);
+    expect(r.frame().inputLive).toBe(false);
+  });
+
+  it('REQ-089 music: none starts for a series-over room, and a playing track stops when the series ends', () => {
+    const calls: string[] = [];
+    const conductor = createConductor({
+      start: () => calls.push('start'),
+      stop: () => calls.push('stop'),
+      setLevel: () => calls.push('level'),
+    });
+    const drive = (r: ReturnType<typeof rig>): void => {
+      conductor.onFrame(r.frame());
+      conductor.onState(r.store.getState());
+    };
+    const quiet = rig();
+    const goAt = quiet.startRound();
+    quiet.receive(room('seriesOver'));
+    quiet.timers.advance(goAt + 500);
+    drive(quiet);
+    expect(calls).not.toContain('start');
+    calls.length = 0;
+
+    const playing = rig();
+    const goAt2 = playing.startRound();
+    playing.timers.advance(goAt2 + 500);
+    drive(playing);
+    expect(calls).toEqual(['start']);
+    playing.receive(room('seriesOver'));
+    drive(playing);
+    expect(calls.filter((call) => call === 'start')).toHaveLength(1);
+    expect(calls.at(-1)).toBe('stop'); // stopping twice (frame and state) is harmless
+  });
+
+  it('REQ-031 the resume countdown (room status paused, no pause recorded) still goes live at its go instant', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 500);
+    r.receive(room('paused'));
+    r.receive({
+      type: 'paused',
+      seat: 'B',
+      graceEndsAt: SERVER_NOW + 20_000,
+      serverNow: SERVER_NOW,
+      pausesLeft: 2,
+    });
+    r.receive({ type: 'resumed', startsAt: SERVER_NOW + 3000, serverNow: SERVER_NOW, tick: 40 });
+    expect(r.frame().inputLive).toBe(false);
+    r.timers.advance(3000);
+    expect(r.frame().inputLive).toBe(true);
+  });
+});
+
+describe('REQ-053 a soft drop held through the result into the next round', () => {
+  it('REQ-053 sends softDropStart again at the next DUEL! while ↓ is still held', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 100);
+    r.frame();
+    r.store.input.keyDown('ArrowDown', false);
+    expect(r.inputs().map((m) => (m.type === 'input' ? m.action.type : ''))).toEqual([
+      'softDropStart',
+    ]);
+    r.receive(room('roundOver'));
+    r.receive({
+      type: 'countdown',
+      startsAt: SERVER_NOW + 6000,
+      serverNow: SERVER_NOW + 3000,
+      tick: 0,
+    });
+    r.receive(room('countdown'));
+    r.timers.advance(3000);
+    expect(r.frame().inputLive).toBe(true);
+    expect(r.inputs().map((m) => (m.type === 'input' ? [m.seq, m.action.type] : []))).toEqual([
+      [1, 'softDropStart'],
+      [1, 'softDropStart'],
+    ]);
   });
 });

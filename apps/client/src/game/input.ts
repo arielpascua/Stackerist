@@ -9,6 +9,8 @@
  * - `repeat` key events (the OS's auto-repeat) are ignored.
  * - While disabled (input not live) presses are dropped, not queued. A soft drop that was started and
  *   then released while disabled is stopped as soon as input is live again.
+ * - A new round starts from a fresh engine state (no soft drop): a ↓ that stays held across the round
+ *   boundary sends softDropStart again when input goes live; one released meanwhile owes nothing.
  */
 import type { Action } from '@stackerist/engine';
 import type { Timers } from './timers.ts';
@@ -58,6 +60,8 @@ export class InputController {
   #downHeld = false;
   /** We sent softDropStart and still owe a softDropStop. */
   #softDropOn = false;
+  /** A new round began while ↓ was held and a soft drop was on: start it again at the next go. */
+  #restartSoftDrop = false;
 
   constructor(options: InputControllerOptions) {
     this.#emit = options.emit;
@@ -92,6 +96,7 @@ export class InputController {
     if (key === null) return;
     if (key === 'softDrop') {
       this.#downHeld = false;
+      this.#restartSoftDrop = false;
       this.#stopSoftDropIfOwed();
       return;
     }
@@ -109,7 +114,17 @@ export class InputController {
     this.#cancelRepeat();
     this.#directions = [];
     this.#downHeld = false;
+    this.#restartSoftDrop = false;
     this.#stopSoftDropIfOwed();
+  }
+
+  /**
+   * A new round's countdown arrived: its engine state has no soft drop, so none is owed a stop, and a
+   * ↓ still held (with a soft drop on) is started again when input goes live.
+   */
+  newRound(): void {
+    this.#restartSoftDrop = this.#softDropOn && this.#downHeld;
+    this.#softDropOn = false;
   }
 
   /** Input goes live (the DUEL! frame) or stops (pause, round end, unmount). */
@@ -122,6 +137,11 @@ export class InputController {
       return;
     }
     if (!this.#downHeld) this.#stopSoftDropIfOwed();
+    if (this.#restartSoftDrop && this.#downHeld) {
+      this.#softDropOn = true;
+      this.#emit({ type: 'softDropStart' });
+    }
+    this.#restartSoftDrop = false;
   }
 
   #stopSoftDropIfOwed(): void {

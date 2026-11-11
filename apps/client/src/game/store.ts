@@ -55,7 +55,6 @@ import type {
   Side,
 } from './contract.ts';
 import { registerFrameDriver, type FrameDriver } from './driver.ts';
-import { SnapshotEventFilter } from './events.ts';
 import { isDanger, sideSeats, standoffPhase } from './frame.ts';
 import { InputController } from './input.ts';
 import type { Timers } from './timers.ts';
@@ -210,8 +209,6 @@ export class CoreStore implements GameStore, FrameDriver {
   #chains: Record<Seat, Chain> = { A: NO_CHAIN, B: NO_CHAIN };
   /** Snapshot-driven effects waiting for the next frame. */
   #fxQueue: FxEvent[] = [];
-  /** Each attack/cancel event plays once, however many snapshots repeat it (REQ-087). */
-  readonly #eventFilter = new SnapshotEventFilter();
   /** True once the estimator has an anchor or a snapshot sample (the match clock is meaningful). */
   #clockKnown = false;
   #ownMemo: {
@@ -384,7 +381,8 @@ export class CoreStore implements GameStore, FrameDriver {
   }
 
   #sendAction(action: Action): void {
-    if (!this.#inputLive) return;
+    // A bind/rejoin in flight resets the seq space on `joined`: an input sent now would carry a stale seq.
+    if (!this.#inputLive || this.#bind !== null) return;
     const tick = this.#options.estimator.targetTick(this.#options.now());
     const seq = this.#nextSeq;
     this.#nextSeq += 1;
@@ -515,9 +513,13 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#state = { ...this.#state, room };
     // A finished round or series has no pause (REQ-031: the disconnect overlay never outlives it).
     const over = room.status === 'roundOver' || room.status === 'seriesOver';
+    // No round is coming: a forfeit with no `gameOver` (REQ-089) must not leave a countdown that would
+    // go live at its would-be DUEL! instant. The next round's `countdown` message sets a new one.
+    const idle = over || room.status === 'waiting';
     this.#patch({
       hud: this.#buildHud(this.#state.role),
       ...(over && this.#state.paused !== null ? { paused: null } : {}),
+      ...(idle && this.#state.countdown !== null ? { countdown: null } : {}),
     });
   }
 
@@ -528,8 +530,8 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#nextSeq = 1;
     this.#reseedPredictor();
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
-    this.#eventFilter.reset();
     this.#setLive(false);
+    this.#input.newRound();
     this.#patch({
       countdown: { kind: 'start', goAtMs: estimator.goAtLocalMs() ?? now, tick: msg.tick },
       roundStartTick: msg.tick,
@@ -618,7 +620,9 @@ export class CoreStore implements GameStore, FrameDriver {
         this.#fxQueue.push({ kind: 'nudge', side: this.#sideOf(seat, role), rows: inserted });
       }
     }
-    for (const event of this.#eventFilter.fresh(msg.events)) {
+    // The server hands each event to exactly one snapshot (takeSnapshotEvents clears; catch-up sends []),
+    // so every listed event plays, even two equal ones from one tick (REQ-087).
+    for (const event of msg.events) {
       if (event.type === 'attack') {
         const chain = chains[event.from];
         chains[event.from] = { sent: chain.sent + event.rows, cancelled: chain.cancelled };
@@ -657,10 +661,13 @@ export class CoreStore implements GameStore, FrameDriver {
   // ---- Frame models ----
 
   #isLive(nowMs: number): boolean {
-    const { role, connection, countdown, paused, result } = this.#state;
+    const { role, connection, countdown, paused, result, room } = this.#state;
     return (
       isSeat(role) &&
+      // 'paused' is the room status through the resume countdown too; a real pause is `paused !== null`.
+      (room?.status === 'countdown' || room?.status === 'playing' || room?.status === 'paused') &&
       connection === 'open' &&
+      this.#bind === null &&
       countdown !== null &&
       nowMs >= countdown.goAtMs &&
       paused === null &&
@@ -774,7 +781,6 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#publicMemo = {};
     this.#publics = {};
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
-    this.#eventFilter.reset();
     this.#fxQueue = [];
     this.#nextSeq = 1;
     this.#clockKnown = false;
