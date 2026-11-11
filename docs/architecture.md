@@ -144,7 +144,7 @@ Two gaps, each closed with a test and not a lint change (OPS is idle in W1–W2)
 | `garbage.ts` | attack maths, cancelling, `receiveGarbage` |
 | `player.ts` | `createPlayerState`, `applyAction`, `tick`, `ghostPosition`, `isGrounded`, `playerStats` |
 | `simulate.ts` | the prediction helper `simulate` (client and the REQ-082 harness) |
-| `index.ts` | re-exports everything, and **keeps `ENGINE_VERSION`** until W2 removes the placeholder imports in server and client |
+| `index.ts` | re-exports everything (the `ENGINE_VERSION` scaffold placeholder was removed after the code review) |
 
 ### 2.2 `src/types.ts` (complete; the W1a checkpoint commit copies it verbatim)
 
@@ -516,7 +516,7 @@ only unacknowledged inputs (`seq > lastAckSeq`).
 The protocol is the shared netcode kernel: wire contract, views, clock and predictor. It runs in the browser,
 so `types: []` and no `node:*` imports.
 
-### 3.1 Modules (all re-exported from `src/index.ts`; keep `PROTOCOL_VERSION` until W2 removes the placeholder imports)
+### 3.1 Modules (all re-exported from `src/index.ts`; the `PROTOCOL_VERSION` scaffold placeholder was removed after the code review)
 | File | Contents |
 |---|---|
 | `constants.ts` | paths, timings, shared limits, storage keys, `ERROR_CODES`, `CLOSE_CODES` (§3.3) |
@@ -1533,7 +1533,7 @@ orchestrator greps the §7.4 producer/consumer pairs.
 
 | Wave | Agents (parallel within the wave) | Gate before the next wave |
 |---|---|---|
-| W1a | ENG: checkpoint commit with `src/types.ts`, `src/config.ts` and `src/index.ts` (§2.2–2.3 verbatim; index re-exports them and keeps `ENGINE_VERSION`) → merge. In parallel the orchestrator or OPS applies **Δ1** (OQ-1). | both merged; `pnpm typecheck` green |
+| W1a | ENG: checkpoint commit with `src/types.ts`, `src/config.ts` and `src/index.ts` (§2.2–2.3 verbatim; index re-exports them and kept `ENGINE_VERSION`, removed later) → merge. In parallel the orchestrator or OPS applies **Δ1** (OQ-1). | both merged; `pnpm typecheck` green |
 | W1b | ENG (the rest of the engine) ∥ PRO (protocol, including `predict.ts`) | both merged; the W1 DONE WHEN commands green |
 | W2 | SRV (the full server, including series, report and snapshot events) ∥ CORE (checkpoint `game/contract.ts` → merge, then the core scope) ∥ UI (starts after the CORE checkpoint) | merge order SRV → CORE → UI (UI rebases so `main.tsx` typechecks) |
 | W3 | QA (core e2e, geometry, latency, perf) ∥ OPS (Δ2, Δ3, push to the private GitHub repo, CI green) | REQ-001–058 evidence green → unlocks W4 |
@@ -1550,7 +1550,7 @@ orchestrator greps the §7.4 producer/consumer pairs.
   - `git diff --exit-code -- pnpm-lock.yaml '**/package.json'`
   - `rg -n "Math\.random|\bDate\b|performance\.|setTimeout|setInterval" packages/engine/src` finds nothing
 - DO NOT: add dependencies; change the §2.2 shapes after the checkpoint without the orchestrator; put floats in
-  state; mutate inputs; import `node:*`; remove `ENGINE_VERSION` (W2 does that).
+  state; mutate inputs; import `node:*`; remove `ENGINE_VERSION` (W2 did that; the constant is gone).
 
 **PRO — `cdt:backend-engineer` (W1b, after Δ1)**
 - EXCLUSIVE: `packages/protocol/**`. This includes adding the `@stackerist/source` conditions to its
