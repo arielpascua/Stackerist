@@ -119,6 +119,50 @@ describe('REQ-084 series winner screen: "ARIEL WINS THE SERIES 2–1", per-round
     expect(html).toContain('Round 2, a draw that was replayed');
   });
 
+  it('REQ-084 a forfeited round is a "Forfeit" chip with no winner: a forfeit adds no round win', () => {
+    for (const reason of ['OPPONENT_LEFT', 'OPPONENT_DISCONNECTED'] as const) {
+      const over = makeGameOver({
+        reason,
+        series: makeSeries({
+          round: 1,
+          score: { A: 0, B: 0 },
+          over: true,
+          winner: 'B',
+          endReason: reason,
+          rounds: [{ round: 1, replay: false, winner: 'B', reason, durationTicks: 180 }],
+        }),
+      });
+      const view = deriveResult(input({ result: over, role: 'A', opponentSeated: false }));
+      expect(view.chips.map((chip) => chip.label)).toEqual(['R1 · Forfeit']);
+      expect(view.chips[0]?.winner).toBe('');
+      expect(view.chips[0]?.name).toBe('Round 1, ended by a forfeit');
+      const html = render(view);
+      expect(html).toContain('R1 · Forfeit');
+      expect(html).not.toContain('round-chip__winner');
+      expect(html).not.toContain('Round 1, won by');
+    }
+  });
+
+  it('REQ-084 a forfeit after played rounds keeps the played chips and marks only the last', () => {
+    const over = makeGameOver({
+      reason: 'OPPONENT_LEFT',
+      series: makeSeries({
+        round: 2,
+        score: { A: 1, B: 0 },
+        over: true,
+        winner: 'A',
+        endReason: 'OPPONENT_LEFT',
+        rounds: [
+          { round: 1, replay: false, winner: 'A', reason: 'TOP_OUT', durationTicks: 9000 },
+          { round: 2, replay: false, winner: 'A', reason: 'OPPONENT_LEFT', durationTicks: 500 },
+        ],
+      }),
+    });
+    const view = deriveResult(input({ result: over }));
+    expect(view.chips.map((chip) => chip.label)).toEqual(['R1', 'R2 · Forfeit']);
+    expect(view.chips.map((chip) => chip.winner)).toEqual(['Ariel', '']);
+  });
+
   it('REQ-084 the series card ends in New series and Back to home; the winner gets win art', () => {
     const view = deriveResult(input());
     expect(view.primary).toEqual({ label: 'New series', disabled: false });

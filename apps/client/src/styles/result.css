@@ -328,8 +328,9 @@
   white-space: nowrap;
 }
 
-/* A replayed draw has no winner: the whole chip ("R2 · Draw, replayed") reads in muted tan. */
-.round-chip[data-draw='true'] .label {
+/* A replayed draw or a forfeited round has no winner: the whole chip ("R2 · Draw, replayed", "R1 · Forfeit") reads in muted tan. */
+.round-chip[data-draw='true'] .label,
+.round-chip[data-forfeit='true'] .label {
   letter-spacing: var(--tracking-caption);
 }
 

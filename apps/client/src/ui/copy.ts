@@ -214,8 +214,10 @@ export const COPY = {
       youLeft: (winner: string) => `You left, so ${winner} won the series.`,
       leftSpectator: (name: string) => `${name} left the series.`,
       chipRound: (round: number) => `R${String(round)}`,
+      chipForfeit: (round: number) => `R${String(round)} · Forfeit`,
       chipDraw: (round: number) => `R${String(round)} · Draw, replayed`,
       chipName: (round: number, winner: string) => `Round ${String(round)}, won by ${winner}`,
+      chipForfeitName: (round: number) => `Round ${String(round)}, ended by a forfeit`,
       chipDrawName: (round: number) => `Round ${String(round)}, a draw that was replayed`,
     },
     chart: {
