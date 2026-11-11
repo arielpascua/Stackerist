@@ -39,11 +39,13 @@ export interface BestMomentView {
 
 /** One played round on the series card, including a replayed draw (REQ-084). */
 export interface RoundChip {
-  /** "R1", or the whole "R2 · Draw, replayed" for a draw. */
+  /** "R1", or the whole "R2 · Draw, replayed" for a draw, "R2 · Forfeit" for a forfeit. */
   readonly label: string;
-  /** The winner's name; empty for a draw. */
+  /** The winner's name; empty for a draw or a forfeit (a forfeit adds no round win, decision 25). */
   readonly winner: string;
   readonly draw: boolean;
+  /** The round ended because a player left or timed out: no round winner is shown. */
+  readonly forfeit: boolean;
   /** The chip's accessible name. */
   readonly name: string;
 }
@@ -155,9 +157,10 @@ export function clearName(lines: number): string {
   return names[Math.min(names.length, Math.max(1, lines)) - 1] ?? names[0];
 }
 
-/** "Triple · +5 sent · 1 cancelled · 04:12" (cancelled only when above 0). */
+/** "Triple · +5 sent · 1 cancelled · 04:12" ("sent" and "cancelled" only when above 0). */
 export function bestMomentCaption(moment: WireBestMoment, roundTick: number): string {
-  const parts = [clearName(moment.linesCleared), COPY.combo.sent(moment.sent)];
+  const parts = [clearName(moment.linesCleared)];
+  if (moment.sent > 0) parts.push(COPY.combo.sent(moment.sent));
   if (moment.cancelled > 0) parts.push(COPY.combo.cancelled(moment.cancelled));
   parts.push(formatTicks(roundTick));
   return parts.join(' · ');
@@ -277,11 +280,21 @@ function chartFor(
 
 function chipsOf(series: SeriesView, names: SeatNames): readonly RoundChip[] {
   return series.rounds.map((round): RoundChip => {
+    if (round.reason === 'OPPONENT_LEFT' || round.reason === 'OPPONENT_DISCONNECTED') {
+      return {
+        label: COPY.result.series.chipForfeit(round.round),
+        winner: '',
+        draw: false,
+        forfeit: true,
+        name: COPY.result.series.chipForfeitName(round.round),
+      };
+    }
     if (round.winner === null) {
       return {
         label: COPY.result.series.chipDraw(round.round),
         winner: '',
         draw: true,
+        forfeit: false,
         name: COPY.result.series.chipDrawName(round.round),
       };
     }
@@ -289,6 +302,7 @@ function chipsOf(series: SeriesView, names: SeatNames): readonly RoundChip[] {
       label: COPY.result.series.chipRound(round.round),
       winner: names[round.winner],
       draw: false,
+      forfeit: false,
       name: COPY.result.series.chipName(round.round, names[round.winner]),
     };
   });

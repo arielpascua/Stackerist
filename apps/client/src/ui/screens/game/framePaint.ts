@@ -6,6 +6,7 @@
 import type { StandoffPhase } from '../../../game/contract.ts';
 import { type BannerState, comboSubline } from '../../combo.ts';
 import { COPY } from '../../copy.ts';
+import { formatClock } from '../../format.ts';
 
 export interface BannerElements {
   readonly root: HTMLElement;
@@ -80,4 +81,26 @@ export function paintCountdown(
   const announcement = countdownAnnouncement(prev, next, intro);
   if (announcement !== null) live.textContent = announcement;
   return next;
+}
+
+/**
+ * Paints the match clock; returns the text now shown. While the connection is down the digits hold their
+ * last value and the box is marked stale (dimmed in CSS): a clock that keeps counting under a
+ * "connection lost" overlay would look like the match is still running.
+ */
+export function paintClock(
+  clock: HTMLElement,
+  shown: string,
+  elapsedMs: number | null,
+  connected: boolean,
+): string {
+  const stale = connected ? undefined : 'true';
+  if (clock.dataset.stale !== stale) {
+    if (stale === undefined) delete clock.dataset.stale;
+    else clock.dataset.stale = stale;
+  }
+  if (!connected) return shown;
+  const text = formatClock(elapsedMs ?? 0);
+  if (text !== shown) clock.textContent = text;
+  return text;
 }

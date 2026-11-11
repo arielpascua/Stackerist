@@ -299,6 +299,20 @@ describe('REQ-021 session: token storage and automatic rejoin', () => {
     }
   });
 
+  it('REQ-049 the measured ping is forgotten while the socket is not open, so the HUD never shows a stale number', () => {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+    r.receive({ type: 'ping', t: 1, rtt: 3 });
+    expect(r.store.getState().rttMs).toBe(3);
+    r.drop(1006);
+    expect(r.store.getState()).toMatchObject({ connection: 'reconnecting', rttMs: null });
+    r.openSocket();
+    expect(r.store.getState().rttMs).toBeNull();
+    r.receive({ type: 'ping', t: 2, rtt: 7 });
+    expect(r.store.getState().rttMs).toBe(7);
+  });
+
   it('REQ-049 the notice survives a failed retry and clears when the rejoin succeeds', () => {
     const r = rig();
     r.openSocket();
@@ -550,6 +564,18 @@ describe('REQ-054 prediction wiring', () => {
     spectator.receive({ type: 'joined', code: CODE, seat: 'spectator' });
     spectator.receive(room('playing'));
     expect(spectator.store.capturingGameKeys()).toBe(false);
+  });
+
+  it('REQ-049 once reconnecting has given up, Space and Enter reach the overlay buttons again', () => {
+    const r = rig();
+    r.openSocket();
+    r.receive({ type: 'created', code: CODE, token: TOKEN, seat: 'A' });
+    r.receive(room('playing'));
+    r.drop(1006);
+    expect(r.store.capturingGameKeys()).toBe(true);
+    r.closeSocket();
+    expect(r.store.getState().connection).toBe('closed');
+    expect(r.store.capturingGameKeys()).toBe(false);
   });
 
   it('REQ-054 spectators see A left and B right from snapshots, never live', () => {

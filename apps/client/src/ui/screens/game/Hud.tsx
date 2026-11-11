@@ -11,15 +11,25 @@ import { Bdi } from '../../components/Bdi.tsx';
 import { COPY } from '../../copy.ts';
 import { TEST_IDS } from '../../testIds.ts';
 
-export function Ping({ rttMs }: { readonly rttMs: number | null }) {
-  const ms = rttMs === null ? null : Math.round(rttMs);
+/**
+ * `offline`: the socket is not open, so any number left over is stale. The ping shows the "unknown"
+ * state (hollow ring, "— ms") and its accessible name says the connection is lost.
+ */
+export function Ping({
+  rttMs,
+  offline = false,
+}: {
+  readonly rttMs: number | null;
+  readonly offline?: boolean;
+}) {
+  const ms = rttMs === null || offline ? null : Math.round(rttMs);
   const quality = pingQuality(ms);
   return (
     <p
       className="ping"
       data-quality={quality}
       role="img"
-      aria-label={COPY.game.pingName(quality, ms)}
+      aria-label={offline ? COPY.game.pingOffline : COPY.game.pingName(quality, ms)}
       data-testid={TEST_IDS.game.ping}
     >
       <span className="ping__dot" aria-hidden="true" />

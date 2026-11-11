@@ -101,6 +101,7 @@ function render(
       onLeave={noop}
       onPrimary={noop}
       onBackHome={noop}
+      onRetry={noop}
     />,
   );
 }

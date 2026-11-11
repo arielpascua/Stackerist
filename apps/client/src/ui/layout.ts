@@ -37,3 +37,22 @@ export function scaledHitMinPx(scale: number, minPx: number = HIT_MIN_PX): numbe
   if (!Number.isFinite(scale) || scale <= 0 || scale >= 1) return 0;
   return Math.ceil(minPx / scale) + 1;
 }
+
+/**
+ * The first well column the combo banner must never cover (REQ-052): pieces spawn and fall through
+ * columns 3 to 9, so a banner over them would hide the piece you are steering during a chain. The banner
+ * hangs to the left of this column's left edge instead.
+ */
+export const COMBO_BANNER_CLEAR_COLUMN = 3;
+
+/**
+ * Where the combo banner's right edge sits, in CSS px from the left of its board canvas: the left edge of
+ * `COMBO_BANNER_CLEAR_COLUMN`. The CSS (`.combo-banner { right: calc(...) }`) is the same sum; a node
+ * test evaluates the rule against this at the gate viewports.
+ */
+export function comboBannerRightEdgePx(board: {
+  readonly outer: { readonly x: number };
+  readonly cell: number;
+}): number {
+  return board.outer.x + COMBO_BANNER_CLEAR_COLUMN * board.cell;
+}

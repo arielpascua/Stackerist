@@ -74,6 +74,8 @@ export const COPY = {
     roundTag: (round: number) => `Round ${String(round)}`,
     watching: (count: number) => `${String(count)} watching`,
     pingMs: (ms: number | null) => (ms === null ? '— ms' : `${String(ms)} ms`),
+    /** The ping's accessible name while the socket is not open (its text reads "— ms"). */
+    pingOffline: 'Connection lost, no ping',
     pingName: (quality: 'good' | 'fair' | 'poor' | 'unknown', ms: number | null) =>
       quality === 'unknown' || ms === null
         ? 'Connection not measured yet'
@@ -177,7 +179,8 @@ export const COPY = {
       piecesPerSecond: 'Pieces per second',
       actionsPerMinute: 'Actions per minute',
     },
-    bestComboValue: (combo: number) => (combo > 0 ? `×${String(combo)}` : '—'),
+    /** The on-board banner only exists from ×2 (REQ-052), so a plain single clear reads "—". */
+    bestComboValue: (combo: number) => (combo >= 2 ? `×${String(combo)}` : '—'),
     /** Shown for a stat that cannot be computed (a round shorter than one second). */
     noValue: '—',
     yourBestMoment: 'Your best moment',
@@ -212,8 +215,10 @@ export const COPY = {
       youLeft: (winner: string) => `You left, so ${winner} won the series.`,
       leftSpectator: (name: string) => `${name} left the series.`,
       chipRound: (round: number) => `R${String(round)}`,
+      chipForfeit: (round: number) => `R${String(round)} · Forfeit`,
       chipDraw: (round: number) => `R${String(round)} · Draw, replayed`,
       chipName: (round: number, winner: string) => `Round ${String(round)}, won by ${winner}`,
+      chipForfeitName: (round: number) => `Round ${String(round)}, ended by a forfeit`,
       chipDrawName: (round: number) => `Round ${String(round)}, a draw that was replayed`,
     },
     chart: {

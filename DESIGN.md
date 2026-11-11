@@ -642,9 +642,11 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
 - **Ping**: 8 px dot plus "38 ms" (`--text-meta`, tabular, min-width 6ch). Thresholds come from
   `pingQuality()` in `tokens.ts`: **good** under 80 ms (`--color-ok`), **fair** 80–149 ms
   (`--color-accent`), **poor** 150 ms or more (`--color-alert`; prediction is only guaranteed up to
-  150 ms, REQ-069). Before the first measurement: a hollow 1.5 px `--color-text-muted` ring and
-  "— ms". The number always accompanies the dot, so colour is never the only cue. The accessible
-  name is, for example, "Connection good, 38 milliseconds".
+  150 ms, REQ-069). Before the first measurement, **and whenever the socket is not open**
+  (reconnecting, retrying, gave up): a hollow 1.5 px `--color-text-muted` ring and "— ms"; the last
+  number is forgotten on a drop, so the HUD never shows a green "3 ms" over a dead connection. The
+  number always accompanies the dot, so colour is never the only cue. The accessible name is, for
+  example, "Connection good, 38 milliseconds"; while offline it is "Connection lost, no ping".
 - **Name plates** (32 px row): own name `--text-title-lg` plus "YOU" label; opponent name
   `--text-title-sm` plus "OPPONENT" label. Names truncate with an ellipsis (`min-width: 0`) and the
   full name goes in `title`. **Series pips** follow each name: two squares (10 px own, 8 px
@@ -664,7 +666,11 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
 - **VS column**: VS (`--text-display-md`, amber, skewed); "Speed" label plus number
   (`--text-display-sm` 800, shows engine level + 1, so 1 to 13); match clock (`--text-display-sm`
   800 amber on `--color-clock-bg` with a 1 px `--color-line` border, mm:ss derived from ticks,
-  tabular).
+  tabular). While the connection is down the clock holds its last value and dims to
+  `--color-text-muted` (`data-stale`), so it never looks like the match is still running; it resumes
+  on reconnect. While the standoff plates are up (3, 2, 1, DUEL!) the whole VS column is
+  `visibility: hidden` (the plates carry their own VS and round tag); it keeps its box, so nothing
+  moves.
 - **Legend**: key caps (`--surface-chip`, 1 px `--color-line`, `--radius-control`, `--text-meta`
   `--color-text`) with action text in `--color-text-muted`. Shown: ← → move · ↑ X rotate · Z Ctrl
   rotate back (macOS: Z only) · ↓ soft drop · Space hard drop · M music · Esc leave. One line, never
@@ -703,8 +709,12 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
 ### Combo banner
 - Shown on a board while that player's combo is ×2 or more (REQ-052), on both boards and for
   spectators. Own board: `--color-accent` fill, "COMBO ×N" in `--text-display-sm` `--color-ink`,
-  padding per the frontmatter, skewed `--skew-onair`, `--shadow-onair`, hanging 14 px past the
-  board's left edge at 25% of the board's height, at `--z-board-fx`. Sub-line in `--text-label`
+  padding per the frontmatter, skewed `--skew-onair` (pivoting on its top right corner),
+  `--shadow-onair`, at 25% of the board's height, at `--z-board-fx`. **Placement (9a U6):** the
+  banner's right edge is anchored to the left edge of well column 3 (the first column a piece falls
+  through), so it grows leftwards over the meter and the margin and never covers columns 3 to 9
+  however wide its text is; columns 0 to 2 can still sit under it for the second or so it shows. It
+  was 14 px past the board's left edge and covered columns 0 to 4. Sub-line in `--text-label`
   `--weight-body-strong` `--color-ink-soft`: the chain's running totals "+3 SENT · 1 CANCELLED"
   (each part only when above 0), summed from the attack and cancel events since the chain started.
   Opponent board: `--text-title-sm`, no sub-line. No live-region announcements (too frequent).
@@ -782,7 +792,18 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
   disconnected. Waiting 20 seconds."), then at 10 s and at 5 s; the per-second digits are
   `aria-hidden`.
 - **Your connection lost** (in a match): the same overlay. Title "CONNECTION LOST", line
-  "Reconnecting… Your seat is held for 20 seconds." Then the resume countdown.
+  "Reconnecting… Your seat is held for 20 seconds." Then the resume countdown. It shows whenever the
+  socket is not open during a live round, so a silent drop (no close event) is caught by the client's
+  liveness watchdog: no server message for 2 × `PING_INTERVAL_MS` (6 s) closes the socket on the
+  client and starts the same reconnect and rejoin. While it shows, the ping reads "— ms" with the
+  hollow ring and the match clock is frozen and dimmed (see Game HUD); input is off.
+- **Your connection lost, reconnecting gave up** (in a match, 9a U1): the overlay **stays** (a
+  live-looking board with a running clock would lie). Same title; the line is the error-catalogue
+  copy "Can't reach Stackerist. Check your internet connection, then try again." (`role="alert"`),
+  and under it **Try again** (focused; reconnects and rejoins with the seat token) and **Back to
+  home**, both secondary buttons at the 44 px `--hit-min` (not the 32 px HUD size). A successful
+  reconnect clears the overlay and resumes; game keys are released while it shows, so Space and
+  Enter reach the buttons.
 - **Result: round card** (REQ-050/051/059/083/091): full viewport at `--z-result`. Win: `win.webp`
   cover. Lose and draw: the arena under `--scrim-game`. Card: `--surface-card`, a 4 px top rule
   (`--color-accent` on a win, `--color-line` on lose or draw), square. Header: the label "Round 1 ·
@@ -794,7 +815,8 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
   `--text-title-sm` with the score in `--text-display-sm` ("ARIEL 1 – 0 SAM"; seat A on the left).
 - **Report table** (left panel): columns "You" and "{opponent}" (spectators: both names). Rows:
   Lines · Garbage sent · Garbage received · Garbage cancelled · Best combo (×N) · Pieces per second
-  (2 decimals) · Actions per minute (integer). PPS = `piecesPlaced / (durationTicks / 60)`, APM =
+  (2 decimals) · Actions per minute (integer). Best combo shows "—" below ×2, because the on-board
+  banner only exists from ×2 (REQ-052). PPS = `piecesPlaced / (durationTicks / 60)`, APM =
   `actions × 60 / (durationTicks / 60)`; under one second of play these show "—". Labels in
   `--text-table` `--color-text-muted`, values in `--text-title-sm`, tabular, right-aligned.
 - **Stack-height chart** (centre panel; see Report chart).
@@ -803,7 +825,8 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
   uppercase ("SINGLE", "DOUBLE", "TRIPLE", "QUAD"). Then the mini board at the best-moment cell,
   using the block style, with cleared rows outlined 1 px in `--bm-clear-outline` and the finishing
   piece outlined 2 px in `--bm-finisher-outline` (inset). Caption (`--text-table`,
-  `--tracking-caption`): "Triple · +5 sent · 1 cancelled · 04:12" (cancelled only when above 0).
+  `--tracking-caption`): "Triple · +5 sent · 1 cancelled · 04:12" ("sent" and "cancelled" each
+  only when above 0, so a plain single reads "Single · 00:03").
   **Empty:** `bestMoment` is null, so the panel is hidden and the grid collapses to two panels.
   Spectators see both players' best moments.
 - **Actions row:** status text on the left (`--text-small`, polite live region); **NEXT ROUND**
@@ -817,13 +840,17 @@ canvas reads `matchMedia` once and on change, and uses the reduced values in `to
   top-out cannot press Next round. The heading is in an `aria-live="assertive"` region that reads,
   for example, "Round 1 final. You win. Sam topped out at 04:51. Series: Ariel 1, Sam 0."
 - **Result: series card** (REQ-084): the same skeleton and entrance. Label "Series final"; headline
-  "ARIEL WINS THE SERIES 2–1" in `--text-display-md`, amber, skewed, up to 2 lines with
-  `text-wrap: balance`. Reason line: "You won 2 rounds to 1." · "Sam won 2 rounds to 1." · "Sam left,
+  "ARIEL WINS THE SERIES 2–1" in `--text-display-md`, skewed, up to 2 lines with
+  `text-wrap: balance`: amber for the series winner and for spectators (win art), **chalk
+  (`--color-text`) for the loser**, matching YOU LOSE on the round card (amber is kept for a win, so
+  the colour carries the outcome; shipped behaviour, 9a U10). Reason line: "You won 2 rounds to 1." · "Sam won 2 rounds to 1." · "Sam left,
   so the series is yours." · "Sam didn't reconnect in time, so the series is yours." On the right:
   the final score in `--text-display-md` plus the **round chips**, one per played round including
   replays: square chips, 1 px `--color-line`, `--color-bg` fill, "R1" in label style followed by the
   winner's name in `--text-title-xs`. A replay chip reads "R2 · Draw, replayed" in
-  `--color-text-muted`. The body is the deciding round's report (table, chart, best moment). If a
+  `--color-text-muted`. A round ended by a forfeit (a player left or timed out) reads "R1 · Forfeit"
+  in the same muted style, with no winner name: a forfeit ends the series but adds no round win
+  (decision 25), so the chip never sits next to a 0 – 0 score as "R1 SAM". The body is the deciding round's report (table, chart, best moment). If a
   forfeit ended the series mid-round and no report arrived, the body is hidden. Actions: **NEW
   SERIES** (primary) and Back to home. States: "Waiting for opponent to accept…" · "Sam wants a new
   series" · **"Opponent left"** with New series disabled. Win art for the series winner and for
@@ -881,7 +908,8 @@ alone; build hand-rolled SVG with `role="img"`, a title and description, and a t
 | Rate-limited, joins | home plate | "Too many wrong codes in a minute. Wait a minute, then try again." |
 | Rate-limited, creates | home plate | "You've created a lot of games in a minute. Wait a minute, then create one." |
 | Disconnected, `RATE_LIMITED` (inputs) | full-screen plate | "You were disconnected for sending inputs too fast. Go back to home to play again." plus Back to home |
-| Connection lost (home, lobby, result) | top banner at `--z-banner` | "Connection lost. Reconnecting…", then after 3 failed tries "Can't reach Stackerist. Check your internet connection, then try again." plus Try again and Back to home |
+| Connection lost (home, lobby, result) | top banner at `--z-banner` | "Connection lost. Reconnecting…", then after 3 failed tries "Can't reach Stackerist. Check your internet connection, then try again." plus Try again and Back to home (both 44 px secondary buttons) |
+| Connection lost, gave up (in a match) | the in-match lost-connection overlay stays (not the banner) | "Can't reach Stackerist. Check your internet connection, then try again." plus Try again and Back to home (44 px) |
 | Seat expired / room gone on rejoin | home plate | "That game has ended or your seat expired. Create a new game or join with a new code." |
 | Seat taken by another tab (`REPLACED`) | full-screen plate | "This seat is now open in another tab. Close this tab, or reload to play here." |
 | Clipboard failed | lobby | "Couldn't copy. Select the link above and copy it." |
@@ -908,7 +936,8 @@ package.
   like "Incoming garbage: 4 rows"; the logo image has `alt="Stackerist"`.
 - **Reduced motion:** every moment in the motion table has its alternative; nothing is just
   switched off without a cue.
-- **Hit targets:** 44 px on home, lobby and result; 32 px in the HUD.
+- **Hit targets:** 44 px on home, lobby and result, and on the Try again / Back to home buttons of
+  the connection banner and the lost-connection overlay; 32 px in the HUD.
 - **Browser surfaces:** `::selection` uses `--color-accent` background with `--color-ink` text;
   `caret-color: var(--color-accent)`; `color-scheme: dark`; scrollbars (lobby list only, if it ever
   overflows) use `scrollbar-color: var(--color-line) var(--color-bg)`; link underline offset 3 px.

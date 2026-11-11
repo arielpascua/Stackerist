@@ -82,7 +82,7 @@
   color: var(--color-text-muted);
 }
 
-/* HUD: Leave, Stop watching, banner actions. */
+/* HUD: Leave, Stop watching. (The connection banner's actions are secondary buttons: 44 px.) */
 .btn--hud {
   min-height: var(--hit-hud);
   padding: 0 var(--space-3);

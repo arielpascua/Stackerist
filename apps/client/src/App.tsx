@@ -258,6 +258,7 @@ export function App({ services, router, device }: AppProps) {
           onLeave={goHome}
           onPrimary={nextRound}
           onBackHome={goHome}
+          onRetry={retryConnection}
         />
       );
   } else if (

@@ -153,11 +153,12 @@ export function ResultCard(props: ResultCardProps) {
                       key={index}
                       className="round-chip"
                       data-draw={chip.draw ? 'true' : undefined}
+                      data-forfeit={chip.forfeit ? 'true' : undefined}
                       data-testid={TEST_IDS.result.chip}
                     >
                       <span aria-hidden="true" className="round-chip__text">
                         <span className="label">{chip.label}</span>
-                        {chip.draw ? null : (
+                        {chip.draw || chip.forfeit ? null : (
                           <span className="round-chip__winner" title={chip.winner}>
                             <Bdi>{chip.winner}</Bdi>
                           </span>

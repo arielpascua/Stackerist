@@ -170,6 +170,7 @@
    * the danger-ring padding (render/geometry.ts). Name plates and the combo banner align to it.
    */
   --board-inset: calc(var(--meter-width) * 2 + var(--danger-ring-width));
+  --cell: var(--cell-own);
 
   display: flex;
   flex-direction: column;
@@ -178,6 +179,7 @@
 
 .player-col--opp {
   --board-inset: calc(var(--meter-width-opp) + var(--meter-width) + var(--danger-ring-width));
+  --cell: var(--cell-opp);
 }
 
 /* Spectators: both boards use the own size and meter (render/geometry.ts arenaCellSizes). */
@@ -324,6 +326,14 @@
   text-align: center;
 }
 
+/*
+ * While the standoff plates are up, the HUD's own round tag, VS, speed and clock sit behind them (VS
+ * would show twice). Hidden by visibility, so the column keeps its box and nothing moves.
+ */
+.arena:has(.countdown:not([hidden])) .vs-col {
+  visibility: hidden;
+}
+
 .round-tag {
   display: flex;
   flex-direction: column;
@@ -379,6 +389,11 @@
   letter-spacing: var(--tracking-clock);
 }
 
+/* Connection down: the digits hold their last value, dimmed (colour only, no layout change). */
+.clock[data-stale='true'] {
+  color: var(--color-text-muted);
+}
+
 /* ---- Legend ---- */
 
 .legend {
@@ -428,15 +443,19 @@
 /* ---- Combo banner (DESIGN.md "Combo banner"; REQ-052) ---- */
 
 .combo-banner {
-  /* DESIGN.md: hangs 14 px past the board's left edge at 25% of its height; padding 6 16 6 12. */
-  --banner-hang: 14px;
+  /*
+   * DESIGN.md: the right edge is anchored to the left edge of column --banner-clear-cols (3), at 25% of
+   * the board's height, so the banner grows leftwards over the meter and the margin and never covers a
+   * column a piece falls through; padding 6 16 6 12. --board-inset is where the board starts in the
+   * canvas, --cell its pitch (the same sum as comboBannerRightEdgePx in ui/layout.ts).
+   */
   --banner-pad-block: 6px;
   /* Room for the hard on-air shadow inside the wipe's clip. */
   --banner-clip-bleed: var(--space-2);
 
   position: absolute;
   top: 25%;
-  left: calc(var(--board-inset) - var(--banner-hang));
+  right: calc(100% - var(--board-inset) - var(--banner-clear-cols) * var(--cell));
   z-index: var(--z-board-fx);
   display: flex;
   flex-direction: column;
@@ -446,7 +465,9 @@
   box-shadow: var(--shadow-onair);
   white-space: nowrap;
   pointer-events: none;
+  /* The slant pivots on the top right corner, so the right edge never leans past its anchor. */
   transform: skewX(var(--skew-onair));
+  transform-origin: top right;
 }
 
 .combo-banner[data-phase='hidden'] {
