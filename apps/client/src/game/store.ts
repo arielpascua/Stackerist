@@ -384,7 +384,8 @@ export class CoreStore implements GameStore, FrameDriver {
   }
 
   #sendAction(action: Action): void {
-    if (!this.#inputLive) return;
+    // A bind/rejoin in flight resets the seq space on `joined`: an input sent now would carry a stale seq.
+    if (!this.#inputLive || this.#bind !== null) return;
     const tick = this.#options.estimator.targetTick(this.#options.now());
     const seq = this.#nextSeq;
     this.#nextSeq += 1;
@@ -661,6 +662,7 @@ export class CoreStore implements GameStore, FrameDriver {
     return (
       isSeat(role) &&
       connection === 'open' &&
+      this.#bind === null &&
       countdown !== null &&
       nowMs >= countdown.goAtMs &&
       paused === null &&

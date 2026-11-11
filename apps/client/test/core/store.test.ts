@@ -710,3 +710,29 @@ describe('REQ-021 a fresh page rejoining a live round (F5 after a silent drop)',
     expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
   });
 });
+
+describe('REQ-021 no input while a bind or rejoin request is outstanding', () => {
+  it('REQ-021 a key pressed after the socket reopens but before joined sends nothing; after joined the next input is seq 1', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 500);
+    expect(r.frame().inputLive).toBe(true);
+    for (let i = 0; i < 4; i += 1) r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().map((m) => (m.type === 'input' ? m.seq : 0))).toEqual([1, 2, 3, 4]);
+    r.drop();
+    r.openSocket();
+    expect(r.sent.at(-1)).toEqual({ type: 'rejoin', code: CODE, token: TOKEN });
+    const sentBefore = r.sent.length;
+    // The rAF loop keeps running while the rejoin is in flight.
+    expect(r.frame().inputLive).toBe(false);
+    r.store.input.keyDown('KeyZ', false);
+    expect(r.sent).toHaveLength(sentBefore);
+    r.receive({ type: 'joined', code: CODE, seat: 'A' });
+    r.receive(room('playing'));
+    r.receive(snapshot(150, ownState(150)));
+    expect(r.frame().inputLive).toBe(true);
+    r.store.input.keyDown('ArrowUp', false);
+    expect(r.inputs().at(-1)).toMatchObject({ type: 'input', seq: 1 });
+    expect(r.sent.length).toBe(sentBefore + 1);
+  });
+});
