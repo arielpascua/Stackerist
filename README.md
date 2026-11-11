@@ -162,7 +162,7 @@ A read-only security review of the server found two availability defects (an unb
 
 - Covered: forging state, hijacking a seat, replaying or reordering inputs, flooding, oversized or malformed frames, abusing pauses, name-based XSS, cross-site WebSocket use, and exhausting rooms, sockets or memory from one address.
 - Not covered: a determined scripted client can recover its own piece seed (see [Known limitations](#known-limitations)). A bot that reads the screen and plays within the input limits cannot be told apart from a person, and neither can an assistive overlay.
-- Not yet verified on a real host: the per-IP limits rely on the platform overwriting `X-Real-IP` (see [Deploying](#deploying)).
+- Verified on Railway on 2026-11-11: the per-IP limits rely on the platform overwriting `X-Real-IP`, and eight creates that each claimed a different address were counted as one client (see [Deploying](#deploying)).
 - Most of the end-to-end suite runs with a relaxed `style-src` that allows inline styles, because its probes inject `<style>` tags. One dedicated spec runs a real match under the strict production policy (see [How the rules are tested](#how-the-rules-are-tested)).
 
 ## How the rules are tested
@@ -232,7 +232,7 @@ Give parallel runs their own sandbox with `--tempDirName .stryker-tmp/<name>`. A
 
 ## Deploying
 
-**Nothing has been deployed yet.** None of the following has run on a host. The first Railway build will also be the first real Docker image build.
+**Deployed on 2026-11-11** to Railway (project `stackerist`, region Singapore) from commit `9271b12`. Railway built the image on the first attempt, which was the first real build of this `Dockerfile`. The results of the first-deploy checklist are below; two items are still open.
 
 ### The image
 
@@ -244,11 +244,11 @@ The `Dockerfile` is multi-stage on Node 24 Alpine (`node:24-alpine`): a base wit
 
 Checklist for the first deploy:
 
-1. **Read deploy success from Railway's deployment status, never from the CLI's exit code.** On the development machine the CLI has reported success for failed deploys.
-2. Confirm the region shown in the deployment status is Southeast Asia (Singapore).
-3. Confirm `GET /healthz` returns `{"ok":true}` and that two browsers on different networks can play a full match over `wss://`.
-4. **Verify the client IP header.** In production the server takes the client IP from `X-Real-IP` (`CLIENT_IP_SOURCE` defaults to `x-real-ip` when `NODE_ENV=production`; other values are `socket`, or `x-forwarded-for` together with `TRUSTED_PROXY_HOPS`). Railway documents `X-Real-IP` but not whether a value sent by the client is overwritten. Test it from one machine: send 11 room creates inside a minute, each with a different made-up `X-Real-IP`. If the 11th succeeds, the header passes through and the per-IP limits can be bypassed; switch the source or fall back to the socket address. Do not log IP addresses while testing.
-5. Re-measure the CPU budget on the container's metrics (see [How the rules are tested](#how-the-rules-are-tested)).
+1. **Read deploy success from Railway's deployment status, never from the CLI's exit code.** On the development machine the CLI has reported success for failed deploys. _Done:_ the status went `BUILDING` then `SUCCESS` in about a minute and the container logged `server.listening`.
+2. Confirm the region shown in the deployment status is Southeast Asia (Singapore). _Done:_ the deployment manifest shows `asia-southeast1-eqsg3a` with one replica, and responses come from the `sin1` edge.
+3. Confirm `GET /healthz` returns `{"ok":true}` and that two browsers on different networks can play a full match over `wss://`. _Half done:_ `/healthz` answers, and two scripted players ran a 70 second match over `wss://` at 60.0 ticks per second with 1,122 inputs and no errors. **Still open: two people on different networks playing a full match (REQ-076).**
+4. **Verify the client IP header.** In production the server takes the client IP from `X-Real-IP` (`CLIENT_IP_SOURCE` defaults to `x-real-ip` when `NODE_ENV=production`; other values are `socket`, or `x-forwarded-for` together with `TRUSTED_PROXY_HOPS`). Railway documents `X-Real-IP` but not whether a value sent by the client is overwritten. Test it from one machine: send 11 room creates inside a minute, each with a different made-up `X-Real-IP`. If the 11th succeeds, the header passes through and the per-IP limits can be bypassed; switch the source or fall back to the socket address. Do not log IP addresses while testing. _Done:_ eight creates, each with a different made-up `X-Real-IP`: six rooms were created and the seventh and every later one was refused with `CREATE_LIMIT` (the cap is six live rooms per client), so Railway overwrites the header and the limits cannot be bypassed this way. The `Host` header is also preserved (the policy's `connect-src` names the public host and the `Origin` check passes), and a foreign `Origin` gets 403. IPv6 could not be tested: the Railway domain has no IPv6 address.
+5. Re-measure the CPU budget on the container's metrics (see [How the rules are tested](#how-the-rules-are-tested)). **Still open:** the CPU percentage was not measured, because shell access to the container and the metrics API were not available in the session that deployed. What was measured: during the 70 second match the server held 60.0 ticks per second and snapshots were at most 1,739 bytes. Read the service's CPU graph in the Railway dashboard while a match runs.
 
 ### Other hosts (Fly.io, Render and similar)
 
@@ -268,8 +268,8 @@ To try the image locally, `docker build -t stackerist .` then `docker run -p 300
 - **Browser bots and assistive overlays cannot be prevented.** Software that reads the screen and sends legal inputs looks like a person.
 - **Joining your own room from two tabs is allowed.** It is useful for testing and gives no advantage, because each seat still plays by the server's rules.
 - **Phones are not a supported player platform, and there is no phone layout for watching.** The game is keyboard-only. Touch-only devices are warned and offered **Watch instead**, but the spectator view is the desktop layout scaled down to about half size on a 390 px screen, and the result card to between about 39 % and 54 % of full size, so both are hard to read. The owner decided on 2026-11-11 not to build a portrait layout for this. The in-game top bar fits a 390 px screen (Music shows as an icon only), but the "joined as spectator" notice collapses to nothing at that width.
-- **The Docker image has never been built with Docker on the development machine.** Its stages were replayed by hand, step by step; the first Railway build is the first real image build.
-- **Per-IP limits depend on the host overwriting `X-Real-IP`.** Not yet verified; see the first-deploy checklist.
+- **The Docker image has never been built with Docker on the development machine.** Railway built it successfully on the first deploy (2026-11-11), but no local Docker build was ever run.
+- **Per-IP limits depend on the host overwriting `X-Real-IP`.** Verified on Railway on 2026-11-11; if the host or its proxy setup changes, repeat the check in the first-deploy checklist.
 - **A long server stall can make inputs bounce for a few seconds.** The server catches up at most 5 ticks per wake and drops the rest. After a stall of roughly 600 ms or more, the client's clock estimate stays ahead of the server's tick until its oldest samples age out (about 4 s), and in that window the server refuses inputs (`BAD_TICK`) and the piece snaps back. Found in code review; not fixed because it is rare and the fix is in the clock estimator.
 - **The CPU budget was measured on a busy machine.** 3.91 % of one core, passing if any of three 10-second windows is under 5 %. Re-measure on the host.
 - **Names refuse emoji and look-alike tricks, but not homoglyphs or text symbols reliably.** Emoji presentations, joined sequences, flags, skin tones and keycaps are refused (the owner's decision of 2026-11-10, for readability), as are control, format and direction-changing characters, blank-looking fillers and long stacks of combining marks; names are normalized (NFKC) and need at least one letter or digit. Letters that merely look like others (a Cyrillic "О" in "YОU") are accepted. Whether text-style symbols such as a star, a heart or the copyright sign are accepted depends on the Unicode data of the Node build that runs the server, so do not rely on either.
