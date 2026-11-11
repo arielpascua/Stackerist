@@ -814,3 +814,30 @@ describe('REQ-089 REQ-054 a room that is no longer in a round never goes live or
     expect(r.frame().inputLive).toBe(true);
   });
 });
+
+describe('REQ-053 a soft drop held through the result into the next round', () => {
+  it('REQ-053 sends softDropStart again at the next DUEL! while ↓ is still held', () => {
+    const r = rig();
+    const goAt = r.startRound();
+    r.timers.advance(goAt + 100);
+    r.frame();
+    r.store.input.keyDown('ArrowDown', false);
+    expect(r.inputs().map((m) => (m.type === 'input' ? m.action.type : ''))).toEqual([
+      'softDropStart',
+    ]);
+    r.receive(room('roundOver'));
+    r.receive({
+      type: 'countdown',
+      startsAt: SERVER_NOW + 6000,
+      serverNow: SERVER_NOW + 3000,
+      tick: 0,
+    });
+    r.receive(room('countdown'));
+    r.timers.advance(3000);
+    expect(r.frame().inputLive).toBe(true);
+    expect(r.inputs().map((m) => (m.type === 'input' ? [m.seq, m.action.type] : []))).toEqual([
+      [1, 'softDropStart'],
+      [1, 'softDropStart'],
+    ]);
+  });
+});

@@ -535,6 +535,7 @@ export class CoreStore implements GameStore, FrameDriver {
     this.#chains = { A: NO_CHAIN, B: NO_CHAIN };
     this.#eventFilter.reset();
     this.#setLive(false);
+    this.#input.newRound();
     this.#patch({
       countdown: { kind: 'start', goAtMs: estimator.goAtLocalMs() ?? now, tick: msg.tick },
       roundStartTick: msg.tick,
