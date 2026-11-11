@@ -57,7 +57,7 @@ function harness() {
     url: 'ws://example.test/ws',
     timers,
     now: () => timers.now,
-    watchVisibility: visibility.watch,
+    watchVisibility: (onVisible) => visibility.watch(onVisible),
     createSocket: (_url, handlers) => {
       const conn = new FakeConnection(handlers);
       connections.push(conn);
