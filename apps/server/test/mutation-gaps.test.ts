@@ -327,7 +327,8 @@ describe('mutation gaps: the error handler (REQ-072)', () => {
     await registerHttp(app, { clientDist: null, log, inlineStyles: false });
     app.get('/fail/:status', (request) => {
       const raw = (request.params as { status: string }).status;
-      const statusCode: unknown = /^\d+$/.test(raw) ? Number(raw) : raw;
+      // 's404' is the numeric string '404': a status must be a number, so it is not honoured.
+      const statusCode: unknown = /^\d+$/.test(raw) ? Number(raw) : raw === 's404' ? '404' : raw;
       throw Object.assign(new Error('boom'), { statusCode });
     });
     app.get('/plain', () => {
@@ -346,7 +347,15 @@ describe('mutation gaps: the error handler (REQ-072)', () => {
       expect(errorLog, String(status)).not.toHaveBeenCalled();
       expect(res.headers['x-content-type-options']).toBe('nosniff');
     }
-    for (const url of ['/fail/399', '/fail/500', '/fail/503', '/fail/text', '/plain', '/null']) {
+    for (const url of [
+      '/fail/399',
+      '/fail/500',
+      '/fail/503',
+      '/fail/text',
+      '/fail/s404',
+      '/plain',
+      '/null',
+    ]) {
       errorLog.mockClear();
       const res = await app.inject({ method: 'GET', url });
       expect(res.statusCode, url).toBe(500);
