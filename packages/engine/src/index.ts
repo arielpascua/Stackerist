@@ -15,5 +15,3 @@ export * from './srs.js';
 export * from './garbage.js';
 export * from './player.js';
 export * from './simulate.js';
-
-export const ENGINE_VERSION = '0.0.0';
