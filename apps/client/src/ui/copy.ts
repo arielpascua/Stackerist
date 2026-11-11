@@ -74,6 +74,8 @@ export const COPY = {
     roundTag: (round: number) => `Round ${String(round)}`,
     watching: (count: number) => `${String(count)} watching`,
     pingMs: (ms: number | null) => (ms === null ? '— ms' : `${String(ms)} ms`),
+    /** The ping's accessible name while the socket is not open (its text reads "— ms"). */
+    pingOffline: 'Connection lost, no ping',
     pingName: (quality: 'good' | 'fair' | 'poor' | 'unknown', ms: number | null) =>
       quality === 'unknown' || ms === null
         ? 'Connection not measured yet'

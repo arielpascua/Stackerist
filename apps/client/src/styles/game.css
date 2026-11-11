@@ -379,6 +379,11 @@
   letter-spacing: var(--tracking-clock);
 }
 
+/* Connection down: the digits hold their last value, dimmed (colour only, no layout change). */
+.clock[data-stale='true'] {
+  color: var(--color-text-muted);
+}
+
 /* ---- Legend ---- */
 
 .legend {

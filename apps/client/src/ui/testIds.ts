@@ -91,6 +91,8 @@ export const TEST_IDS = {
     overlay: 'disconnect-overlay',
     title: 'disconnect-title',
     timer: 'disconnect-timer',
+    tryAgain: 'disconnect-try-again',
+    backHome: 'disconnect-back-home',
   },
   result: {
     card: 'result-card',

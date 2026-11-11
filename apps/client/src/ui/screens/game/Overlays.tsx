@@ -3,8 +3,9 @@
  * - the DUEL! standoff countdown (REQ-050, REQ-086), painted per frame;
  * - the disconnect overlay with its live seconds timer (REQ-050, REQ-031).
  */
-import { type Ref, useLayoutEffect, useRef } from 'react';
+import { type Ref, useEffect, useLayoutEffect, useRef } from 'react';
 import { Bdi, withNames } from '../../components/Bdi.tsx';
+import { Button } from '../../components/common.tsx';
 import { COPY } from '../../copy.ts';
 import { secondsLeft } from '../../format.ts';
 import { TEST_IDS } from '../../testIds.ts';
@@ -132,6 +133,10 @@ export interface DisconnectOverlayProps {
   readonly graceSeconds: number;
   /** Own connection only: why it dropped (a recoverable close), instead of the generic line. */
   readonly reason?: string | null;
+  /** Own connection only: reconnecting has given up, so show "Can't reach Stackerist…" and the buttons. */
+  readonly failed?: boolean;
+  readonly onRetry?: () => void;
+  readonly onHome?: () => void;
 }
 
 const ANNOUNCE_AT = [10, 5] as const;
@@ -141,8 +146,16 @@ export function DisconnectOverlay({
   spectator,
   graceSeconds,
   reason = null,
+  failed = false,
+  onRetry,
+  onHome,
 }: DisconnectOverlayProps) {
   const timerRef = useRef<HTMLParagraphElement>(null);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  // The alert has appeared with two buttons: put focus on the first so Enter retries at once.
+  useEffect(() => {
+    if (failed) retryRef.current?.focus({ preventScroll: true });
+  }, [failed]);
   const liveRef = useRef<HTMLParagraphElement>(null);
   const name = opponent?.name ?? null;
   const graceEndsAtMs = opponent?.graceEndsAtMs ?? null;
@@ -184,9 +197,30 @@ export function DisconnectOverlay({
             <h2 className="overlay-title" data-testid={TEST_IDS.disconnect.title}>
               {COPY.disconnect.connectionLostTitle}
             </h2>
-            <p className="small" role="status">
-              {reason ?? COPY.disconnect.connectionLostLine(graceSeconds)}
+            <p className="small" role={failed ? 'alert' : 'status'}>
+              {failed
+                ? COPY.errors.cantReach
+                : (reason ?? COPY.disconnect.connectionLostLine(graceSeconds))}
             </p>
+            {failed ? (
+              <div className="disconnect__actions">
+                <Button
+                  ref={retryRef}
+                  variant="secondary"
+                  onClick={onRetry}
+                  data-testid={TEST_IDS.disconnect.tryAgain}
+                >
+                  {COPY.errors.tryAgain}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={onHome}
+                  data-testid={TEST_IDS.disconnect.backHome}
+                >
+                  {COPY.errors.backToHome}
+                </Button>
+              </div>
+            ) : null}
           </>
         ) : (
           <>

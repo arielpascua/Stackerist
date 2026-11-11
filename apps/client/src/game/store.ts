@@ -331,8 +331,9 @@ export class CoreStore implements GameStore, FrameDriver {
 
   /** True while this player's round is on screen: game keys are captured and never reach buttons. */
   capturingGameKeys(): boolean {
-    const { role, room, result } = this.#state;
-    if (!isSeat(role) || room === null || result !== null) return false;
+    const { role, room, result, connection } = this.#state;
+    // Reconnecting has given up: the overlay's Try again and Back to home buttons need Space and Enter.
+    if (!isSeat(role) || room === null || result !== null || connection === 'closed') return false;
     return room.status === 'countdown' || room.status === 'playing' || room.status === 'paused';
   }
 
@@ -433,8 +434,20 @@ export class CoreStore implements GameStore, FrameDriver {
     if (connection !== 'open') this.#setLive(false);
     // The retries ran out (or the socket was closed on purpose): the notice would be stale.
     const stale = connection === 'closed' && this.#state.recoverableClose !== null;
-    if (connection !== this.#state.connection || closedBy !== this.#state.closedBy || stale) {
-      this.#patch({ connection, closedBy, ...(stale ? { recoverableClose: null } : {}) });
+    // The last ping belongs to the connection that just went away: the HUD reads "— ms" until the next one.
+    const staleRtt = connection !== 'open' && this.#state.rttMs !== null;
+    if (
+      connection !== this.#state.connection ||
+      closedBy !== this.#state.closedBy ||
+      stale ||
+      staleRtt
+    ) {
+      this.#patch({
+        connection,
+        closedBy,
+        ...(stale ? { recoverableClose: null } : {}),
+        ...(staleRtt ? { rttMs: null } : {}),
+      });
     }
   }
 

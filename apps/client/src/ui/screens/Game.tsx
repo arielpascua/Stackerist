@@ -14,12 +14,11 @@ import { LeaveConfirm } from '../components/LeaveConfirm.tsx';
 import { MusicButton } from '../components/MusicButton.tsx';
 import { COPY } from '../copy.ts';
 import { reconnectNotice } from '../errors.ts';
-import { formatClock } from '../format.ts';
 import { useFitScale, useReducedMotion, useViewport } from '../hooks.ts';
 import { legendIsShort } from '../layout.ts';
 import { otherSeat, type ResultView, type SeatNames } from '../result.ts';
 import { TEST_IDS } from '../testIds.ts';
-import { paintBanner, paintCountdown } from './game/framePaint.ts';
+import { paintBanner, paintClock, paintCountdown } from './game/framePaint.ts';
 import { Legend, PlayerColumn, Ping, VsColumn } from './game/Hud.tsx';
 import { CountdownOverlay, DisconnectOverlay } from './game/Overlays.tsx';
 import { ResultCard } from './ResultCard.tsx';
@@ -37,6 +36,8 @@ export interface GameProps {
   readonly onLeave: () => void;
   readonly onPrimary: () => void;
   readonly onBackHome: () => void;
+  /** Try again on the lost-connection overlay once reconnecting has given up. */
+  readonly onRetry: () => void;
 }
 
 const LIVE_STATUSES: ReadonlySet<RoomMessage['status']> = new Set([
@@ -128,11 +129,13 @@ export function Game(props: GameProps) {
     let phase: StandoffPhase = null;
     let clock = '';
     return store.subscribeFrame((frame) => {
-      const elapsed = store.matchElapsedMs(frame.nowMs);
-      const nextClock = formatClock(elapsed ?? 0);
-      if (nextClock !== clock && clockRef.current !== null) {
-        clock = nextClock;
-        clockRef.current.textContent = nextClock;
+      if (clockRef.current !== null) {
+        clock = paintClock(
+          clockRef.current,
+          clock,
+          store.matchElapsedMs(frame.nowMs),
+          store.getState().connection === 'open',
+        );
       }
       const lRoot = leftBannerRoot.current;
       const lCount = leftBannerCount.current;
@@ -202,7 +205,10 @@ export function Game(props: GameProps) {
   const rightHud = state.hud.right;
   const dim = dimmedSides(showResult ? result : null, leftSeat);
   const score = room.series.score;
-  const lostConnection = live && state.connection === 'reconnecting';
+  // Any state but open during a live round means the board is not being updated: reconnecting, a retry
+  // in progress, or reconnecting has given up (failed). The overlay stays until the socket is open again.
+  const lostConnection = live && state.connection !== 'open';
+  const connectionFailed = state.connection === 'closed';
   const resuming = state.countdown?.kind === 'resume';
   // Belt and braces for REQ-031: a result, or a gameOver the room status has not caught up with, ends
   // the pause, so the disconnect overlay and its live region never sit under the result card.
@@ -242,7 +248,7 @@ export function Game(props: GameProps) {
               {COPY.game.watching(room.spectators)}
             </p>
           ) : null}
-          <Ping rttMs={state.rttMs} />
+          <Ping rttMs={state.rttMs} offline={state.connection !== 'open'} />
           <MusicButton music={services.music} />
           <div className="topbar__leave">
             <Button
@@ -336,6 +342,9 @@ export function Game(props: GameProps) {
             spectator={spectator}
             graceSeconds={GRACE_MS / 1000}
             reason={reconnectNotice(state)}
+            failed={connectionFailed}
+            onRetry={props.onRetry}
+            onHome={props.onBackHome}
           />
         ) : paused !== null && pausedName !== null && !resuming && paused.seat !== role ? (
           <DisconnectOverlay
