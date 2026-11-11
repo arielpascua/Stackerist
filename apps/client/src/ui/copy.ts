@@ -179,7 +179,8 @@ export const COPY = {
       piecesPerSecond: 'Pieces per second',
       actionsPerMinute: 'Actions per minute',
     },
-    bestComboValue: (combo: number) => (combo > 0 ? `×${String(combo)}` : '—'),
+    /** The on-board banner only exists from ×2 (REQ-052), so a plain single clear reads "—". */
+    bestComboValue: (combo: number) => (combo >= 2 ? `×${String(combo)}` : '—'),
     /** Shown for a stat that cannot be computed (a round shorter than one second). */
     noValue: '—',
     yourBestMoment: 'Your best moment',

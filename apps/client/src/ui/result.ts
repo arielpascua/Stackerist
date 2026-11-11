@@ -157,9 +157,10 @@ export function clearName(lines: number): string {
   return names[Math.min(names.length, Math.max(1, lines)) - 1] ?? names[0];
 }
 
-/** "Triple · +5 sent · 1 cancelled · 04:12" (cancelled only when above 0). */
+/** "Triple · +5 sent · 1 cancelled · 04:12" ("sent" and "cancelled" only when above 0). */
 export function bestMomentCaption(moment: WireBestMoment, roundTick: number): string {
-  const parts = [clearName(moment.linesCleared), COPY.combo.sent(moment.sent)];
+  const parts = [clearName(moment.linesCleared)];
+  if (moment.sent > 0) parts.push(COPY.combo.sent(moment.sent));
   if (moment.cancelled > 0) parts.push(COPY.combo.cancelled(moment.cancelled));
   parts.push(formatTicks(roundTick));
   return parts.join(' · ');

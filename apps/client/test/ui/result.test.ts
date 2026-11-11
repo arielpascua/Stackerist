@@ -86,6 +86,24 @@ describe('REQ-050 round result card: verdict, reason, series score, both players
     expect(watcher.status).toBe(COPY.result.spectatorWaiting);
   });
 
+  it('REQ-052 "Best combo" shows a dash below x2, because the on-board banner only exists from x2', () => {
+    const result = makeGameOver({
+      stats: {
+        A: makeStats({ bestCombo: 0 }),
+        B: makeStats({ bestCombo: 1 }),
+      },
+    });
+    const view = deriveResult(input({ result }));
+    expect(view.rows[4]?.label).toBe('Best combo');
+    expect(view.rows[4]?.values).toEqual(['—', '—']);
+    const twos = makeGameOver({
+      stats: { A: makeStats({ bestCombo: 2 }), B: makeStats({ bestCombo: 1 }) },
+    });
+    expect(deriveResult(input({ result: twos })).rows[4]?.values).toEqual(['×2', '—']);
+    expect(COPY.result.bestComboValue(1)).toBe('—');
+    expect(COPY.result.bestComboValue(2)).toBe('×2');
+  });
+
   it('REQ-050 Next round: pressed → disabled and waiting; opponent first → still enabled', () => {
     expect(deriveResult(input()).primary).toEqual({ label: 'Next round', disabled: false });
     const pressed = deriveResult(input({ ready: { A: true, B: false } }));
@@ -164,6 +182,18 @@ describe('REQ-051 best moment: own panel, title, caption; hidden when there is n
     expect(bestMomentTitle(makeMoment({ combo: 1, linesCleared: 3 }))).toBe('Triple');
     expect(bestMomentTitle(makeMoment({ combo: 1, linesCleared: 4 }))).toBe('Quad');
     expect(bestMomentTitle(makeMoment({ combo: 1, linesCleared: 1 }))).toBe('Single');
+  });
+
+  it('REQ-051 the caption omits "+0 sent" when nothing was sent, like "cancelled" at 0', () => {
+    expect(bestMomentCaption(makeMoment({ cancelled: 0, linesCleared: 1, sent: 0 }), 180)).toBe(
+      'Single · 00:03',
+    );
+    expect(bestMomentCaption(makeMoment({ cancelled: 2, linesCleared: 1, sent: 0 }), 180)).toBe(
+      'Single · 2 cancelled · 00:03',
+    );
+    expect(bestMomentCaption(makeMoment({ cancelled: 0, linesCleared: 4, sent: 4 }), 180)).toBe(
+      'Quad · +4 sent · 00:03',
+    );
   });
 
   it('REQ-051 the caption lists the clear, rows sent, cancelled only above 0, and the time', () => {
