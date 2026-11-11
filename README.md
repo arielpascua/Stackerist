@@ -232,7 +232,7 @@ Give parallel runs their own sandbox with `--tempDirName .stryker-tmp/<name>`. A
 
 ## Deploying
 
-**Deployed on 2026-11-11** to Railway (project `stackerist`, region Singapore) from commit `9271b12`. Railway built the image on the first attempt, which was the first real build of this `Dockerfile`. The results of the first-deploy checklist are below; two items are still open.
+**Deployed on 2026-11-11** to Railway (project `stackerist`, region Singapore), first from commit `9271b12` and then again from `bd429ac` (the row-clear sound). The checklist results below were taken on the first deploy; the second deploy changed only the client. Railway built the image on the first attempt, which was the first real build of this `Dockerfile`. The results of the first-deploy checklist are below; two items are still open.
 
 ### The image
 

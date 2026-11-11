@@ -1,6 +1,6 @@
 # Production readiness (gate 9f)
 
-Written 2026-11-11 for the first deploy to Railway (Singapore), and updated the same day after it. The service was deployed from commit `9271b12`; the results are in the "First deploy results" section. Each row says what was checked, how, and what is still open.
+Written 2026-11-11 for the first deploy to Railway (Singapore), and updated the same day after it. The service was deployed from commit `9271b12` and redeployed from `bd429ac` (client-only change: the row-clear sound; status `SUCCESS`, `/healthz` 200, a 25 second scripted match at 60.0 ticks per second with no errors). The results are in the "First deploy results" section. Each row says what was checked, how, and what is still open.
 
 | Area | Status | What was checked | Open or weak |
 | --- | --- | --- | --- |
