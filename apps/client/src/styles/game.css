@@ -326,6 +326,14 @@
   text-align: center;
 }
 
+/*
+ * While the standoff plates are up, the HUD's own round tag, VS, speed and clock sit behind them (VS
+ * would show twice). Hidden by visibility, so the column keeps its box and nothing moves.
+ */
+.arena:has(.countdown:not([hidden])) .vs-col {
+  visibility: hidden;
+}
+
 .round-tag {
   display: flex;
   flex-direction: column;

@@ -49,6 +49,22 @@ describe('REQ-086 the standoff is driven by the frame, not by timers', () => {
   });
 });
 
+describe('REQ-086 the HUD VS column steps aside while the standoff is up (U7)', () => {
+  const css = read('styles/game.css');
+
+  it('REQ-086 the HUD VS, round tag, speed and clock are hidden while the standoff overlay shows', () => {
+    expect(css).toMatch(
+      /\.arena:has\(\.countdown:not\(\[hidden\]\)\) \.vs-col\s*\{[^}]*visibility: hidden;/,
+    );
+  });
+
+  it('REQ-086 by visibility only: no display or size change, so the 1280x600 geometry cannot move', () => {
+    const rule = /\.arena:has\(\.countdown:not\(\[hidden\]\)\) \.vs-col\s*\{([^}]*)\}/.exec(css);
+    expect(rule?.[1]).toBeDefined();
+    expect(rule?.[1]).not.toMatch(/display|width|height|margin|padding|position|opacity/);
+  });
+});
+
 describe('REQ-091 the chart is hand-rolled SVG: no chart library', () => {
   it('REQ-091 the client depends on no chart, router or state library', () => {
     const pkg = JSON.parse(readFileSync(`${SRC}../package.json`, 'utf8')) as {
