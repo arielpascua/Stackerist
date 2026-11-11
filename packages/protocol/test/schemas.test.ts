@@ -16,6 +16,7 @@ import {
   MAX_SNAPSHOT_EVENTS,
   MAX_WIRE_INT,
   NAME_MAX_LENGTH,
+  NAME_MIN_LENGTH,
   NameSchema,
   OwnViewSchema,
   PlayerStatsSchema,
@@ -42,6 +43,7 @@ import {
   deepKeys,
   joinArb,
   forbiddenNameChars,
+  letterOrDigit,
   nameArb,
   serverMessageArb,
 } from './arbitraries.js';
@@ -615,27 +617,49 @@ describe('REQ-044 names are trimmed, then 1..16 characters', () => {
     expect(NameSchema.safeParse(`${'x'.repeat(NAME_MAX_LENGTH)}\u0000`).success).toBe(false);
   });
 
-  it('REQ-044 F7 any string is accepted iff its trimmed length is 1..16 and it has no control/format character, and comes out trimmed', () => {
+  // Changed for the re-review N4 (was: "accepted iff its trimmed length is 1..16 and it has no
+  // control/format character, and comes out trimmed"): a name is now also NFKC-normalized, needs a
+  // letter or a digit, and refuses private-use/unassigned/surrogate code points and runs of 3 marks.
+  it('REQ-044 F7 N4 any string is accepted iff, trimmed and NFKC-normalized, it is 1..16 code points with a letter or digit and nothing refused; it comes out normalized', () => {
     const hasForbidden = new RegExp(forbiddenNameChars.source, 'u');
+    const markRun = /\p{M}{3}/u;
     fc.assert(
       fc.property(
         fc.oneof(
           fc.string({ maxLength: 24 }),
           fc.string({ unit: 'binary', maxLength: 24 }),
+          fc.string({ unit: 'grapheme', maxLength: 24 }),
           nameArb.map((n) => `  ${n}\t`),
         ),
         (raw) => {
           const result = NameSchema.safeParse(raw);
-          const length = codePoints(raw.trim());
-          const trimmed = raw.trim();
-          expect(result.success).toBe(
-            length >= 1 && length <= NAME_MAX_LENGTH && !hasForbidden.test(trimmed),
-          );
+          const typed = raw.trim();
+          const normalized = typed.normalize('NFKC').trim();
+          const length = codePoints(normalized);
+          const refused =
+            length < NAME_MIN_LENGTH ||
+            length > NAME_MAX_LENGTH ||
+            hasForbidden.test(typed) ||
+            hasForbidden.test(normalized) ||
+            markRun.test(typed) ||
+            markRun.test(normalized) ||
+            !letterOrDigit.test(normalized);
+          expect(result.success).toBe(!refused);
           if (result.success) {
-            expect(result.data).toBe(trimmed);
+            expect(result.data).toBe(normalized);
+            expect(NameSchema.parse(result.data)).toBe(result.data); // idempotent
           }
         },
       ),
+    );
+  });
+
+  it('REQ-044 N4 every generated canonical name is accepted unchanged, with or without padding', () => {
+    fc.assert(
+      fc.property(nameArb, (name) => {
+        expect(NameSchema.parse(name)).toBe(name);
+        expect(NameSchema.parse(`  ${name}\t`)).toBe(name);
+      }),
     );
   });
 

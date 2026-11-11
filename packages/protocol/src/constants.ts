@@ -29,6 +29,13 @@ export const ROOM_CODE_LENGTH = 6;
 export const NAME_MIN_LENGTH = 1;
 /** Maximum player-name length, counted after trimming, in Unicode code points (see NAME_MIN_LENGTH). */
 export const NAME_MAX_LENGTH = 16;
+/**
+ * Longest name, in code points after trimming, that is even looked at before NFKC normalization. A name
+ * written with separate combining marks is longer than the same name composed (eight times the limit is
+ * far more than any real name needs), and a larger input is refused untouched so that normalizing and
+ * scanning hostile text always costs a few microseconds (security re-review N4).
+ */
+export const NAME_RAW_MAX_LENGTH = NAME_MAX_LENGTH * 8;
 /** Seat token entropy in bytes (128-bit). */
 export const SEAT_TOKEN_BYTES = 16;
 /** Seat token length in base64url characters, no padding. */
